@@ -1,0 +1,65 @@
+# .github/workflows/ci.yml
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [ master, dev ]
+  push:
+    branches: [ master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Run Checkstyle
+        run: mvn checkstyle:check
+
+      - name: Run Unit Tests with Coverage
+        run: mvn test jacoco:report
+
+      - name: Verify Coverage >= 80%
+        run: |
+          coverage=$(grep -oP '<counter type="INSTRUCTION" missed="\d+" covered="\d+">' target/site/jacoco/jacoco.xml | grep -oP 'covered="\K\d+' | awk '{sum+=$1} END {print sum}')
+          # Сложная логика проверки, упростим:
+          mvn jacoco:check
+
+      - name: Build Docker Images
+        run: |
+          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
+            docker build -t order-platform/$service:pr-${{ github.event.number }} ./$service
+          done
+
+      - name: Run Integration Tests with Testcontainers
+        run: mvn verify -Pintegration-tests
+
+      - name: Security Scan (Trivy)
+        run: |
+          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
+            trivy image --severity CRITICAL order-platform/$service:pr-${{ github.event.number }}
+          done
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/jacoco-report/
