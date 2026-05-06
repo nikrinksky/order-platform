@@ -1,4 +1,9 @@
 spring:
+  # отключение автоконфигурации
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
   application:
     name: auth-service
   datasource:
@@ -25,6 +30,8 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+  main:
+    allow-circular-references: true
 
 jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
@@ -32,7 +39,7 @@ jwt:
   refresh-expiration: 604800000
 
 server:
-  port: 8081
+  port: 8090
   error:
     include-message: always
 
@@ -40,3 +47,13 @@ logging:
   level:
     com.orderplatform.auth: DEBUG
     org.springframework.security: DEBUG
+
+#    добавлено
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
