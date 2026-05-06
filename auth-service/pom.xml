@@ -137,6 +137,15 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version> <!-- Явно укажите актуальную версию -->
+                <configuration>
+                    <!-- Эта строка особенно важна для корректной работы плагина -->
+                    <configLocation>sun_checks.xml</configLocation>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
