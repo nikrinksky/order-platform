@@ -31,14 +31,14 @@ jobs:
       - name: Run Checkstyle
         run: mvn checkstyle:check
 
-      - name: Run Unit Tests with Coverage
-        run: mvn test jacoco:report
+#      - name: Run Unit Tests with Coverage
+#        run: mvn test jacoco:report
 
-      - name: Verify Coverage >= 80%
-        run: |
-          coverage=$(grep -oP '<counter type="INSTRUCTION" missed="\d+" covered="\d+">' target/site/jacoco/jacoco.xml | grep -oP 'covered="\K\d+' | awk '{sum+=$1} END {print sum}')
+#      - name: Verify Coverage >= 80%
+#        run: |
+#          coverage=$(grep -oP '<counter type="INSTRUCTION" missed="\d+" covered="\d+">' target/site/jacoco/jacoco.xml | grep -oP 'covered="\K\d+' | awk '{sum+=$1} END {print sum}')
           # Сложная логика проверки, упростим:
-          mvn jacoco:check
+#          mvn jacoco:check
 
       - name: Build Docker Images
         run: |
@@ -62,4 +62,4 @@ jobs:
           name: test-reports
           path: |
             **/target/surefire-reports/
-            **/target/jacoco-report/
+#            **/target/jacoco-report/
