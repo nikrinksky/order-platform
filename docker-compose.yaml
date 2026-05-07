@@ -49,7 +49,8 @@ services:
     networks:
       - order-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+#      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "dev123", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -126,7 +127,7 @@ services:
       context: ./auth-service
       dockerfile: Dockerfile
     ports:
-      - "8081:8081"
+      - "8090:8090"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderplatform

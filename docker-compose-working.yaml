@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: orderplatform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: dev123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: dev123
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass dev123
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  zookeeper:
+    image: zookeeper:3.9.1
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.7.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CREATE_TOPICS: "user.created:1:1,order.created:1:1,inventory.reserved:1:1,order.status-changed:1:1"
+    depends_on:
+      - zookeeper
+    restart: unless-stopped
+
+  # Опционально: инструменты для управления
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://redpanda:9092
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
