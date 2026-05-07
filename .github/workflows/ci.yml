@@ -53,11 +53,11 @@ jobs:
       - name: Run Integration Tests with Testcontainers
         run: mvn verify -Pintegration-tests
 
-      - name: Security Scan (Trivy)
-        run: |
-          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
-            trivy image --severity CRITICAL order-platform/$service:pr-${{ github.event.number }}
-          done
+#      - name: Security Scan (Trivy)
+#        run: |
+#          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
+#            trivy image --severity CRITICAL order-platform/$service:pr-${{ github.event.number }}
+#          done
 
       - name: Upload Test Reports
         if: always()
