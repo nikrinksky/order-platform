@@ -40,6 +40,10 @@ jobs:
           # Сложная логика проверки, упростим:
 #          mvn jacoco:check
 
+
+      - name: Build JAR files
+        run: mvn package -DskipTests
+
       - name: Build Docker Images
         run: |
           for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
