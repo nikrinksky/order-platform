@@ -83,4 +83,21 @@ public class JwtService {
         byte[] keyBytes = secret.getBytes();
         return Keys.hmacShaKeyFor(keyBytes);
     }
+
+    public long getExpirationFromToken(String token) {
+        return extractExpiration(token).getTime();
+    }
+
+    public long getRefreshExpiration() {
+        return refreshExpiration;
+    }
+
+    public boolean isRefreshTokenValid(String token) {
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 }

@@ -22,7 +22,7 @@ public class UserMapper {
                         .map(Role::name)
                         .collect(Collectors.toSet()))
                 .isActive(user.isActive())
-                .isEmailVerified(user.isEmailVerified())
+//                .isEmailVerified(user.isEmailVerified())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

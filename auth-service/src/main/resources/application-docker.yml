@@ -1,12 +1,41 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/orderplatform
+    username: platform
+    password: dev123
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: dev123
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    generate-ddl: true
+
   kafka:
     enabled: false
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+logging:
+  level:
+    com.orderplatform.auth: DEBUG
+    org.springframework.security: DEBUG
+    org.springdoc: DEBUG
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tryItOutEnabled: true
+
+server:
+  error:
+    include-message: always

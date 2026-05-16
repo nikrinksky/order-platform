@@ -31,7 +31,7 @@ public class UserService {
                 .lastName(request.getLastName())
                 .roles(Set.of(Role.ROLE_USER))
                 .isActive(true)
-                .isEmailVerified(false)
+//                .isEmailVerified(false)
                 .build();
 
         User savedUser = userRepository.save(user);

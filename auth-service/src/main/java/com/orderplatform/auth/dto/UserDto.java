@@ -19,6 +19,6 @@ public class UserDto {
     private String lastName;
     private Set<String> roles;
     private boolean isActive;
-    private boolean isEmailVerified;
+//    private boolean isEmailVerified;
     private LocalDateTime createdAt;
 }
