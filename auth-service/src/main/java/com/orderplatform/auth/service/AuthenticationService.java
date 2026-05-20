@@ -80,35 +80,34 @@ public class AuthenticationService {
 
     public Map<String, Object> refreshToken(String refreshToken) {
         try {
+            // Проверка, не заблокирован ли refresh token
+            if (tokenBlacklistService.isTokenBlacklisted(refreshToken)) {
+                throw new RuntimeException("Refresh token has been revoked");
+            }
+
             String userEmail = jwtService.extractUsername(refreshToken);
 
             if (userEmail == null) {
-                throw new IllegalArgumentException("Invalid refresh token");
-            }
-
-            // Проверка черного списка для refresh токена
-            if (tokenBlacklistService.isTokenBlacklisted(refreshToken)) {
-                throw new IllegalArgumentException("Refresh token has been revoked");
+                throw new RuntimeException("Invalid refresh token");
             }
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
             User user = userRepository.findByEmail(userEmail)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Проверка активен ли пользователь
             if (!user.isActive()) {
-                throw new DisabledException("User account is disabled");
+                throw new RuntimeException("User account is disabled");
             }
 
             if (!jwtService.isTokenValid(refreshToken, userDetails)) {
-                throw new IllegalArgumentException("Refresh token expired or invalid");
+                throw new RuntimeException("Refresh token expired or invalid");
             }
 
             // Генерируем новые токены
             String newAccessToken = jwtService.generateToken(userDetails);
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
-            // Добавляем старый refresh токен в черный список
+            // Инвалидируем старый refresh token
             tokenBlacklistService.blacklistToken(refreshToken, jwtService.getRefreshExpiration());
 
             log.info("Token refreshed successfully for user: {}", userEmail);
@@ -128,21 +127,21 @@ public class AuthenticationService {
         }
     }
 
-    public void logout(String accessToken) {
+    public void logout(String accessToken, String refreshToken) {
         try {
             String userEmail = jwtService.extractUsername(accessToken);
-            // Получаем время окончания действия токена в миллисекундах
-            long expirationTime = jwtService.getExpirationFromToken(accessToken);
-            long currentTime = System.currentTimeMillis();
-            long ttlMillis = expirationTime - currentTime;
 
-            // Если токен еще не истек, добавляем в черный список
-            if (ttlMillis > 0) {
-                tokenBlacklistService.blacklistToken(accessToken, ttlMillis);
-                log.info("Token blacklisted for user: {}, TTL: {} seconds", userEmail, ttlMillis / 1000);
-            } else {
-                log.info("Token already expired for user: {}", userEmail);
+            // Инвалидируем access token
+            long accessExpiration = jwtService.getExpirationFromToken(accessToken);
+            tokenBlacklistService.blacklistToken(accessToken, accessExpiration);
+
+            // Инвалидируем refresh token
+            if (refreshToken != null && !refreshToken.isEmpty()) {
+                long refreshExpiration = jwtService.getExpirationFromToken(refreshToken);
+                tokenBlacklistService.blacklistToken(refreshToken, refreshExpiration);
             }
+
+            log.info("User logged out successfully: {}", userEmail);
         } catch (Exception e) {
             log.error("Logout error: {}", e.getMessage());
         }
