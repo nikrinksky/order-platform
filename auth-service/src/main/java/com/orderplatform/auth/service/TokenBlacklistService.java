@@ -26,6 +26,7 @@ public class TokenBlacklistService {
             log.info("Token blacklisted with TTL: {} seconds", expirationMillis / 1000);
         } catch (Exception e) {
             log.error("Failed to blacklist token: {}", e.getMessage());
+            e.printStackTrace(); // Это для отладки
         }
     }
 

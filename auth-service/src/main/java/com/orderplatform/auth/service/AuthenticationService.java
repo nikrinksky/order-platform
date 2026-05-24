@@ -82,6 +82,7 @@ public class AuthenticationService {
         try {
             // Проверка, не заблокирован ли refresh token
             if (tokenBlacklistService.isTokenBlacklisted(refreshToken)) {
+                log.warn("Refresh token is blacklisted: {}", refreshToken.substring(0, 20) + "...");
                 throw new RuntimeException("Refresh token has been revoked");
             }
 
@@ -103,14 +104,16 @@ public class AuthenticationService {
                 throw new RuntimeException("Refresh token expired or invalid");
             }
 
+            // *** ВАЖНО: Инвалидируем старый refresh token перед созданием нового ***
+            long oldRefreshExpiration = jwtService.getExpirationFromToken(refreshToken);
+            tokenBlacklistService.blacklistToken(refreshToken, oldRefreshExpiration);
+            log.debug("Old refresh token blacklisted for user: {}", userEmail);
+
             // Генерируем новые токены
             String newAccessToken = jwtService.generateToken(userDetails);
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
-            // Инвалидируем старый refresh token
-            tokenBlacklistService.blacklistToken(refreshToken, jwtService.getRefreshExpiration());
-
-            log.info("Token refreshed successfully for user: {}", userEmail);
+            log.info("Token refreshed successfully for user: {}. Old refresh token revoked.", userEmail);
 
             Map<String, Object> response = new HashMap<>();
             response.put("accessToken", newAccessToken);
