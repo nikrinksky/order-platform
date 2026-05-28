@@ -1,3 +1,9 @@
 spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:default}
+
+  # Запрещаем использование fallback значений в production
+  cloud:
+    config:
+      allow-override: true
+      override-none: false

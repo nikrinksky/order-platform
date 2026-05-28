@@ -69,12 +69,8 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
-      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-#    healthcheck:
-#      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
+      JWT_SECRET: ${JWT_SECRET}
+
     restart: unless-stopped
     networks:
       - order-network
@@ -95,6 +91,8 @@ services:
       - order-network
     depends_on:
       - auth-service
+
+    restart: unless-stopped
 
   # ============= DEVELOPMENT TOOLS =============
   pgadmin:

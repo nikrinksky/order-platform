@@ -14,12 +14,9 @@ spring:
       host: localhost
       port: 6379
       password: dev123
-      timeout: 2000ms
-#      lettuce:
-#        pool:
-#          max-active: 8
-#          max-idle: 8
-#          min-idle: 0
+
+  kafka:
+    enabled: false
 
 jwt:
   secret: devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction1234567890
@@ -41,5 +38,7 @@ logging:
     com.orderplatform.auth: DEBUG
     org.springframework.security: DEBUG
     org.springframework.web: DEBUG
-    org.springframework.data.redis: DEBUG
-    io.lettuce.core: DEBUG
+
+springdoc:
+  swagger-ui:
+    enabled: true

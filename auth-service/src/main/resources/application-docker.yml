@@ -13,28 +13,21 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-    generate-ddl: true
 
   kafka:
     enabled: false
 
 jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  secret: ${JWT_SECRET}
 
 logging:
   level:
-    com.orderplatform.auth: DEBUG
-    org.springframework.security: DEBUG
-    org.springdoc: DEBUG
+    com.orderplatform.auth: INFO
+    org.springframework.security: WARN
 
 springdoc:
   swagger-ui:
     enabled: true
-    path: /swagger-ui.html
-    tryItOutEnabled: true
 
 server:
   error:
