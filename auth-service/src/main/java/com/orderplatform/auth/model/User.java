@@ -41,8 +41,8 @@ public class User implements UserDetails {
     @Column(name = "is_active")
     private boolean isActive;
 
-    @Column(name = "is_email_verified")
-    private boolean isEmailVerified;
+//    @Column(name = "is_email_verified")
+//    private boolean isEmailVerified;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -64,7 +64,7 @@ public class User implements UserDetails {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         isActive = true;
-        isEmailVerified = false;
+//        isEmailVerified = false;
     }
 
     @PreUpdate

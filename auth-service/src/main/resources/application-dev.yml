@@ -1,0 +1,44 @@
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  security:
+    debug: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: dev123
+
+  kafka:
+    enabled: false
+
+jwt:
+  secret: devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction1234567890
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-exception: true
+    include-stacktrace: on_param
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.orderplatform.auth: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+
+springdoc:
+  swagger-ui:
+    enabled: true

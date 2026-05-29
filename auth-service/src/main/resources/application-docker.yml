@@ -1,12 +1,34 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/orderplatform
+    username: platform
+    password: dev123
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: dev123
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
   kafka:
     enabled: false
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
+jwt:
+  secret: ${JWT_SECRET}
+
+logging:
+  level:
+    com.orderplatform.auth: INFO
+    org.springframework.security: WARN
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+server:
+  error:
+    include-message: always

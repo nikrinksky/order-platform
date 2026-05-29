@@ -8,9 +8,13 @@ import com.orderplatform.auth.repository.UserRepository;
 import com.orderplatform.auth.service.AuthenticationService;
 import com.orderplatform.auth.service.UserService;
 import com.orderplatform.auth.service.UserMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -84,12 +88,45 @@ public class AuthController {
         return ResponseEntity.ok("Auth service is working!");
     }
 
+
+    @Operation(summary = "Logout", description = "Invalidates both access and refresh tokens")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully logged out"),
+            @ApiResponse(responseCode = "401", description = "Invalid token")
+    })
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout() {
-        // Здесь можно добавить логику для инвалидации токена
-        // Например, добавить токен в черный список в Redis
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "Logout successful");
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> logout(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenFromHeader) {
+
+        try {
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String accessToken = authHeader.substring(7);
+
+                // Пытаемся получить refresh token из заголовка
+                String refreshToken = refreshTokenFromHeader;
+
+                // Если refresh token не передан в заголовке, пытаемся получить из тела запроса
+                // (для Swagger UI удобства)
+
+                authenticationService.logout(accessToken, refreshToken);
+
+                Map<String, String> response = new HashMap<>();
+                response.put("message", "Logout successful");
+                response.put("accessTokenRevoked", "true");
+                response.put("refreshTokenRevoked", refreshToken != null ? "true" : "false");
+
+                return ResponseEntity.ok(response);
+            }
+
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No access token provided");
+            return ResponseEntity.badRequest().body(error);
+
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Logout failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 }
