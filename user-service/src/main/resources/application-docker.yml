@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/orderplatform
+    username: platform
+    password: dev123
+
+  kafka:
+    bootstrap-servers: redpanda:9092
+
+server:
+  port: 8082
+
+logging:
+  level:
+    com.orderplatform.user: INFO
+    org.springframework.kafka: INFO
+

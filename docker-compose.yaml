@@ -236,8 +236,7 @@ services:
     ports:
       - "8088:8081"
     environment:
-      REDIS_HOSTS: local:redis:6379
-      REDIS_PASSWORD: dev123
+      REDIS_HOSTS: default:redis:6379:0:dev123
     networks:
       - order-network
     depends_on:
