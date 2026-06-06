@@ -4,7 +4,7 @@ spring:
     name: auth-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/orderplatform
+    url: jdbc:postgresql://${DB_HOST:host.docker.internal}:5432/orderplatform
     username: ${DB_USER:platform}
     password: ${DB_PASSWORD:dev123}
 
@@ -20,14 +20,14 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:host.docker.internal}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:dev123}
       timeout: 2000ms
 
   kafka:
     enabled: true
-    bootstrap-servers:  ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers:  ${KAFKA_BOOTSTRAP_SERVERS:host.docker.internal:19092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
