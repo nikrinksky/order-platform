@@ -54,6 +54,74 @@ services:
     networks:
       - order-network
 
+
+  # ============= KAFKA (REDPANDA) =============
+  redpanda:
+    image: redpandadata/redpanda:v23.3.1
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+    ports:
+      - "19092:19092"
+      - "9092:9092"
+#      - "9644:9644"  # Redpanda Admin API
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - order-network
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ============= SCHEMA REGISTRY =============
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://redpanda:9092
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+#  # ============= REDPANDA CONSOLE (UI) =============
+#  redpanda-console:
+#    image: redpandadata/console:v2.4.6
+#    ports:
+#      - "8089:8080"
+#    environment:
+#      KAFKA_BROKERS: redpanda:9092
+#      CONNECT_ENABLED: "false"
+#      SCHEMAREGISTRY_ENABLED: "true"
+#      SCHEMAREGISTRY_URLS: http://schema-registry:8081
+#    depends_on:
+#      redpanda:
+#        condition: service_healthy
+#      schema-registry:
+#        condition: service_healthy
+#    networks:
+#      - order-network
+#    restart: unless-stopped
+
   # ============= MICROSERVICES =============
   auth-service:
     build:
@@ -69,14 +137,26 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       JWT_SECRET: ${JWT_SECRET}
 
-    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
     networks:
       - order-network
-    depends_on:
-      - postgres
-      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+
 
   api-gateway:
     build:
@@ -92,6 +172,27 @@ services:
     depends_on:
       - auth-service
 
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderplatform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
     restart: unless-stopped
 
   # ============= DEVELOPMENT TOOLS =============
@@ -135,8 +236,7 @@ services:
     ports:
       - "8088:8081"
     environment:
-      REDIS_HOSTS: local:redis:6379
-      REDIS_PASSWORD: dev123
+      REDIS_HOSTS: default:redis:6379:0:dev123
     networks:
       - order-network
     depends_on:
@@ -151,3 +251,4 @@ volumes:
   postgres_data:
   mongodb_data:
   redis_data:
+  redpanda_data:

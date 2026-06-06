@@ -1,0 +1,10 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:19092  # Внешний порт Redpanda
+
+server:
+  port: 8082
+
+logging:
+  level:
+    com.orderplatform.user: DEBUG
