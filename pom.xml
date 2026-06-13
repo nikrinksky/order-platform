@@ -34,6 +34,14 @@
                 <spring.profiles.active>test</spring.profiles.active>
             </properties>
         </profile>
+        <profile>
+            <id>integration-tests</id>
+            <properties>
+                <spring.profiles.active>integration-tests</spring.profiles.active>
+                <skipUnitTests>false</skipUnitTests>
+                <skipITs>false</skipITs>
+            </properties>
+        </profile>
     </profiles>
 
 
@@ -62,6 +70,13 @@
                 <version>${spring-cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Test dependencies -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-test</artifactId>
+                <version>${spring-boot.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>

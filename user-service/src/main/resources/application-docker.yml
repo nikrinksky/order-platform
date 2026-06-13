@@ -6,6 +6,12 @@ spring:
 
   kafka:
     bootstrap-servers: redpanda:9092
+    consumer:
+      group-id: user-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
 
 server:
   port: 8082

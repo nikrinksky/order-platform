@@ -31,6 +31,8 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
     consumer:
       group-id: auth-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -96,7 +98,7 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     properties:
       hibernate:
         format_sql: true
@@ -157,9 +159,20 @@ spring:
       ddl-auto: update
 
   kafka:
-    enabled: false
-
-jwt:
+    enabled: true
+    bootstrap-servers: redpanda:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.value.default.to.string: true
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: auth-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.orderplatform.auth.dto"
   secret: ${JWT_SECRET}
 
 logging:
@@ -167,6 +180,8 @@ logging:
     com.orderplatform.auth: INFO
     org.springframework.security: WARN
     org.springdoc: INFO
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: DEBUG
 
 management:
   health:

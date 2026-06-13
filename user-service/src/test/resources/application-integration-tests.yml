@@ -11,19 +11,20 @@ spring:
     show-sql: true
   kafka:
     bootstrap-servers: host.docker.internal:19092
+    enabled: false  # Отключаем Kafka в интеграционных тестах
     consumer:
-      group-id: user-service-group
+      group-id: user-service-test-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-
     producer:
-        key-serializer: org.apache.kafka.common.serialization.StringSerializer
-        value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 server:
-  port: 8082
+  port: 0  # Случайный порт для интеграционных тестов
 
 logging:
   level:
     com.orderplatform.user: DEBUG
+    org.springframework.test: DEBUG
