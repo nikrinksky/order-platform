@@ -10,8 +10,7 @@ spring:
       ddl-auto: update
     show-sql: true
   kafka:
-    bootstrap-servers: host.docker.internal:19092
-    enabled: false  # Отключаем Kafka в интеграционных тестах
+    bootstrap-servers: ""  # Пустое значение отключает Kafka
     consumer:
       group-id: user-service-test-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -26,5 +25,5 @@ server:
 
 logging:
   level:
-    com.orderplatform.user: DEBUG
-    org.springframework.test: DEBUG
+    com.orderplatform.user: INFO
+    org.springframework.test: INFO
