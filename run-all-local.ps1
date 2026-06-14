@@ -20,15 +20,15 @@ Write-Host "Запуск сервисов в отдельных окнах Power
 Write-Host ""
 
 # Создаем окна для каждого сервиса
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:JWT_SECRET='devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction1234567890'; cd '$PWD'; Write-Host '=== auth-service ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl auth-service"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:JWT_SECRET='devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction1234567890'; `$env:SPRING_PROFILES_ACTIVE='dev'; `$env:DB_HOST='host.docker.internal'; `$env:DB_USER='platform'; `$env:DB_PASSWORD='dev123'; `$env:REDIS_HOST='host.docker.internal'; `$env:REDIS_PORT='6379'; `$env:REDIS_PASSWORD='dev123'; `$env:KAFKA_BOOTSTRAP_SERVERS='localhost:19092'; cd '$PWD'; Write-Host '=== auth-service ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl auth-service"
 
 Start-Sleep -Seconds 2
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:AUTH_SERVICE_URL='http://host.docker.internal:8090'; cd '$PWD'; Write-Host '=== api-gateway ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl api-gateway"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:AUTH_SERVICE_URL='http://localhost:8090'; `$env:SPRING_PROFILES_ACTIVE='dev'; `$env:DB_HOST='host.docker.internal'; `$env:DB_USER='platform'; `$env:DB_PASSWORD='dev123'; `$env:REDIS_HOST='host.docker.internal'; `$env:REDIS_PORT='6379'; `$env:REDIS_PASSWORD='dev123'; `$env:KAFKA_BOOTSTRAP_SERVERS='localhost:19092'; cd '$PWD'; Write-Host '=== api-gateway ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl api-gateway"
 
 Start-Sleep -Seconds 2
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; Write-Host '=== user-service ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl user-service"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:SPRING_PROFILES_ACTIVE='dev'; `$env:DB_HOST='localhost'; `$env:DB_USER='platform'; `$env:DB_PASSWORD='dev123'; `$env:KAFKA_BOOTSTRAP_SERVERS='localhost:19092'; cd '$PWD'; Write-Host '=== user-service ===' -ForegroundColor Cyan; .\mvnw.cmd spring-boot:run -pl user-service"
 
 Write-Host ""
 Write-Host "=== Services started ===" -ForegroundColor Green

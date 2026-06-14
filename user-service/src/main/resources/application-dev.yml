@@ -1,5 +1,14 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orderplatform
+    username: platform
+    password: dev123
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
   kafka:
+    enabled: true
     bootstrap-servers: localhost:19092  # Внешний порт Redpanda
 
 server:

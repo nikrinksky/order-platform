@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -19,12 +20,17 @@ import java.util.Map;
  * Custom ConsumerFactory to properly configure JsonDeserializer for Spring Kafka 3.x.
  */
 @Configuration
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class KafkaConfig {
 
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
+    @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
     public ConsumerFactory<String, Object> consumerFactory(
-            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+            @Value("${spring.kafka.bootstrap-servers:}") String bootstrapServers) {
+        // Если bootstrapServers пустой, возвращаем null - бин не будет создан
+        if (bootstrapServers == null || bootstrapServers.trim().isEmpty()) {
+            return null;
+        }
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -43,13 +49,23 @@ public class KafkaConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
+    @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ConsumerFactory<String, Object> consumerFactory) {
+        // Если consumerFactory null (Kafka отключён), возвращаем null
+        if (consumerFactory == null) {
+            return null;
+        }
         ConcurrentKafkaListenerContainerFactory<String, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
         factory.getContainerProperties().setPollTimeout(30000);
         return factory;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
+    public KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry() {
+        return new KafkaListenerEndpointRegistry();
     }
 }

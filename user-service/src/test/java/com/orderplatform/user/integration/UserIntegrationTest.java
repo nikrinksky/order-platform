@@ -19,13 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(locations = "classpath:application-integration-tests.yml")
+@TestPropertySource(properties = {
+    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
+})
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class UserIntegrationTest {
 
     @LocalServerPort
     private int port;
 
-    private static final String POSTGRES_HOST = "host.docker.internal";
+    private static final String POSTGRES_HOST = "localhost";
     private static final int POSTGRES_PORT = 5432;
 
     @Autowired

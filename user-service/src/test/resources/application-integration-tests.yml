@@ -2,7 +2,7 @@ spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:postgresql://host.docker.internal:5432/orderplatform
+    url: jdbc:postgresql://localhost:5432/orderplatform
     username: platform
     password: dev123
   jpa:
@@ -10,6 +10,7 @@ spring:
       ddl-auto: update
     show-sql: true
   kafka:
+    enabled: false
     bootstrap-servers: ""  # Пустое значение отключает Kafka
     consumer:
       group-id: user-service-test-group

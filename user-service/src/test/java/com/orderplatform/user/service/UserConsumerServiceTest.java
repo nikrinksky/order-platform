@@ -1,5 +1,6 @@
 package com.orderplatform.user.service;
 
+import com.orderplatform.user.UserServiceApplication;
 import com.orderplatform.user.dto.UserCreatedEvent;
 import com.orderplatform.user.model.Role;
 import com.orderplatform.user.model.User;
@@ -7,14 +8,25 @@ import com.orderplatform.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 
 import java.time.LocalDateTime;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(
+    properties = {
+        "spring.kafka.enabled=false",
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
+    },
+    webEnvironment = SpringBootTest.WebEnvironment.NONE
+)
+@ActiveProfiles("integration-tests")
+@ContextConfiguration(classes = {UserServiceApplication.class, UserConsumerService.class})
 class UserConsumerServiceTest {
 
     @Autowired
