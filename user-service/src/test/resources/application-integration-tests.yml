@@ -10,20 +10,21 @@ spring:
       ddl-auto: update
     show-sql: true
   kafka:
-    enabled: false  # Отключено по умолчанию, включается через profiles (docker/dev)
+    enabled: false
+    bootstrap-servers: ""  # Пустое значение отключает Kafka
     consumer:
-      group-id: user-service-group
+      group-id: user-service-test-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-
     producer:
-        key-serializer: org.apache.kafka.common.serialization.StringSerializer
-        value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 server:
-  port: 8082
+  port: 0  # Случайный порт для интеграционных тестов
 
 logging:
   level:
-    com.orderplatform.user: DEBUG
+    com.orderplatform.user: INFO
+    org.springframework.test: INFO

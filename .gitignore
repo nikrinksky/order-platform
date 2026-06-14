@@ -37,3 +37,6 @@ build/
 .env
 .env.local
 .env.*.local
+/Task.md
+/Task1.txt
+/.gigacode/plans/1780501398000-playful-harbor.plan.md
