@@ -1,50 +1,30 @@
 package com.orderplatform.user.integration;
 
+import com.orderplatform.user.AbstractIntegrationTest;
 import com.orderplatform.user.model.User;
 import com.orderplatform.user.repository.UserRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(locations = "classpath:application-integration-tests.yml")
-@TestPropertySource(properties = {
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
-})
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class UserIntegrationTest {
+class UserIntegrationTest extends AbstractIntegrationTest {
 
     @LocalServerPort
     private int port;
-
-    private static final String POSTGRES_HOST = "localhost";
-    private static final int POSTGRES_PORT = 5432;
 
     @Autowired
     private TestRestTemplate restTemplate;
 
     @Autowired
     private UserRepository userRepository;
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () ->
-                String.format("jdbc:postgresql://%s:%d/orderplatform", POSTGRES_HOST, POSTGRES_PORT));
-        registry.add("spring.datasource.username", () -> "platform");
-        registry.add("spring.datasource.password", () -> "dev123");
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
-    }
 
     @BeforeEach
     void setUp() {
