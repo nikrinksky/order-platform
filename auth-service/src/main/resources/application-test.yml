@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/orderplatform
+    url: jdbc:postgresql://localhost:${spring.test.database.port:5432}/orderplatform
     username: platform
     password: dev123
     driver-class-name: org.postgresql.Driver
@@ -17,7 +17,7 @@ spring:
   data:
     redis:
       host: localhost
-      port: 6379
+      port: ${spring.test.redis.port:6379}
       password: dev123
       timeout: 2000ms
 

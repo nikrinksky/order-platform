@@ -22,7 +22,7 @@ order-platform/
 
 - **Java 17** (или выше)
 - **Maven 3.8+** (или используйте Maven Wrapper `mvnw`)
-- **Docker & Docker Compose** (для запуска инфраструктуры)
+- **Docker & Docker Compose** (для запуска инфраструктуры и тестов)
 
 ## Быстрый старт
 
@@ -57,6 +57,74 @@ docker-compose --profile dev up -d
 **Для подробной информации о локальном запуске см. [LOCAL_RUN.md](LOCAL_RUN.md)**
 
 **Для устранения проблем см. [TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
+
+## Тестирование
+
+### Локальное тестирование (Windows)
+
+Для запуска интеграционных тестов локально на Windows:
+
+1. Убедитесь что Docker Desktop запущен и контейнеры доступны:
+   ```powershell
+   docker ps
+   ```
+
+2. Запустите необходимые контейнеры через docker-compose (если не запущены):
+   ```powershell
+   docker-compose up -d postgres redis
+   ```
+
+3. Запустите тесты через Maven:
+   ```powershell
+   # Все тесты
+   .\mvnw.cmd test
+   
+   # Только интеграционные тесты
+   .\mvnw.cmd test -Dtest=AuthIntegrationTest
+   ```
+
+**Примечание:** На Windows может потребоваться корректная настройка Docker Desktop.
+Если Testcontainers не может подключиться к Docker, тесты будут использовать внешние контейнеры из docker-compose.
+
+### CI тестирование (Linux)
+
+В CI (GitHub Actions) интеграционные тесты запускаются через профиль `integration-tests`:
+
+```bash
+mvn verify -Pintegration-tests
+```
+
+Testcontainers на Linux работают без проблем через Unix socket `/var/run/docker.sock`.
+
+### Тестирование в IntelliJ IDEA
+
+**Вариант 1: Через Maven** (Рекомендуется)
+
+1. Откройте окно **Maven** в IntelliJ IDEA
+2. Разверните `auth-service` → `Lifecycle` → `test`
+3. Дважды кликните на `test` для запуска тестов
+
+**Вариант 2: Напрямую через IDE**
+
+1. Убедитесь что Docker Desktop запущен и доступен
+2. Настройте Docker в IntelliJ IDEA:
+   - **Settings** → **Build, Execution, Deployment** → **Docker**
+   - Docker engine URL: `npipe:////./pipe/docker_engine`
+   - Нажмите **Test Connection** для проверки
+3. Запустите тесты через IDE (Run → Run...)
+
+**Вариант 3: Использование docker-compose для тестов**
+
+Если IntelliJ IDEA не может подключиться к Docker, можно:
+
+1. Запустить необходимые контейнеры через docker-compose:
+   ```powershell
+   docker-compose up -d postgres redis
+   ```
+
+2. Запустить тесты через IDE - они будут использовать внешние контейнеры
+
+Для подробной информации см. [IDEA_DOCKER_SETUP.md](IDEA_DOCKER_SETUP.md)
 
 ## Конфигурация
 

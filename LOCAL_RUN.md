@@ -236,6 +236,114 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 3. Запустить `Main` класс сервиса в debug режиме
 4. Установить breakpoints и отлаживать
 
+## Тестирование
+
+### Запуск тестов
+
+#### Локально на Windows
+
+Для запуска интеграционных тестов на Windows с использованием Docker Desktop:
+
+```powershell
+# Все тесты
+.\mvnw.cmd test
+
+# Только интеграционные тесты
+.\mvnw.cmd test -Dtest=AuthIntegrationTest
+
+# С профилем integration-tests
+.\mvnw.cmd verify -Pintegration-tests
+```
+
+**Примечание:** Если Docker Desktop не настроен правильно для Testcontainers,
+тесты автоматически будут использовать внешние контейнеры из docker-compose.
+
+#### В IntelliJ IDEA
+
+**Вариант 1: Через Maven** (рекомендуется)
+
+1. Откройте окно **Maven** в IntelliJ IDEA
+2. Разверните `auth-service` → `Lifecycle` → `test`
+3. Дважды кликните на `test` для запуска тестов
+
+**Вариант 2: Напрямую через IDE**
+
+1. Убедитесь что Docker Desktop запущен и доступен
+2. Настройте Docker в IntelliJ IDEA:
+   - **Settings** → **Build, Execution, Deployment** → **Docker**
+   - Docker engine URL: `npipe:////./pipe/docker_engine`
+   - Нажмите **Test Connection** для проверки
+3. Запустите тесты через IDE
+
+**Вариант 3: Использование docker-compose**
+
+1. Запустить необходимые контейнеры:
+   ```powershell
+   docker-compose up -d postgres redis
+   ```
+2. Запустить тесты через IDE - они будут использовать внешние контейнеры
+
+Для подробной информации о настройке Docker в IntelliJ IDEA см. [IDEA_DOCKER_SETUP.md](IDEA_DOCKER_SETUP.md)
+
+#### В CI (GitHub Actions)
+
+В CI интеграционные тесты запускаются через профиль `integration-tests`:
+
+```bash
+mvn verify -Pintegration-tests
+```
+
+Testcontainers на Linux работают без проблем через Unix socket `/var/run/docker.sock`.
+
+### Использование Testcontainers
+
+В проекте используется Testcontainers 1.19.3 для изолированных интеграционных тестов:
+
+- **PostgreSQL** 15-alpine
+- **Redis** 7-alpine
+
+Тесты автоматически запускают контейнеры перед каждым тестом и останавливают после завершения.
+
+**Архитектура тестов:**
+- `AbstractIntegrationTest` - базовый класс для интеграционных тестов
+- `AuthIntegrationTest` - пример интеграционных тестов auth-service
+- Тесты используют `@Testcontainers` и `@SpringBootTest` аннотации
+
+### Устранение проблем с тестами
+
+#### Ошибка: "Could not find a valid Docker environment"
+
+**Причина:** Testcontainers не может подключиться к Docker Desktop
+
+**Решение:**
+1. Убедитесь что Docker Desktop запущен
+2. Настройте Docker в IntelliJ IDEA (см. выше)
+3. Или используйте docker-compose контейнеры (см. выше)
+
+#### Ошибка: "Connection refused" к PostgreSQL/Redis
+
+**Причина:** Контейнеры не запущены или не готовы
+
+**Решение:**
+```powershell
+# Проверить статус контейнеров
+docker ps
+
+# Запустить недостающие контейнеры
+docker-compose up -d postgres redis
+
+# Подождать готовность (30-60 секунд)
+```
+
+#### Тесты запускаются, но падают
+
+**Причина:** База данных не готова или контейнеры не запущены
+
+**Решение:**
+1. Убедитесь что контейнеры запущены и готовы
+2. Проверьте логи контейнеров: `docker logs order-platform-postgres-1`
+3. Увеличьте таймаут подключения в `application-test.yml`
+
 ## Дополнительные ресурсы
 
 - [Docker Compose documentation](https://docs.docker.com/compose/)

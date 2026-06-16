@@ -1,5 +1,6 @@
 package com.orderplatform.auth.integration;
 
+import com.orderplatform.auth.AbstractIntegrationTest;
 import com.orderplatform.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
@@ -7,13 +8,11 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.Map;
 import java.util.Set;
@@ -23,15 +22,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class AuthIntegrationTest {
+class AuthIntegrationTest extends AbstractIntegrationTest {
 
-    @LocalServerPort
+    @Value("${local.server.port}")
     private int port;
-
-    private static final String POSTGRES_HOST = "localhost";
-    private static final int POSTGRES_PORT = 5432;
-    private static final String REDIS_HOST = "localhost";
-    private static final int REDIS_PORT = 6379;
 
     @Autowired
     private TestRestTemplate restTemplate;
@@ -41,20 +35,6 @@ class AuthIntegrationTest {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () ->
-                String.format("jdbc:postgresql://%s:%d/orderplatform", POSTGRES_HOST, POSTGRES_PORT));
-        registry.add("spring.datasource.username", () -> "platform");
-        registry.add("spring.datasource.password", () -> "dev123");
-        registry.add("spring.data.redis.host", () -> REDIS_HOST);
-        registry.add("spring.data.redis.port", () -> REDIS_PORT);
-        registry.add("spring.data.redis.password", () -> "dev123");
-        registry.add("jwt.secret", () -> "testSecretKeyForIntegrationTests1234567890");
-        registry.add("spring.kafka.enabled", () -> "false");
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
 
     @BeforeEach
     void cleanUp() {
