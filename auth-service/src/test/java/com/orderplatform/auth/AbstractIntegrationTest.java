@@ -1,5 +1,8 @@
 package com.orderplatform.auth;
 
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -12,15 +15,17 @@ import org.testcontainers.junit.jupiter.TestcontainersExtension;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(TestcontainersExtension.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public abstract class AbstractIntegrationTest {
 
     // Используем динамический порт для PostgreSQL
     static PostgreSQLContainer<?> postgres;
     static GenericContainer<?> redis;
+    static boolean testcontainersAvailable = false;
 
-    static {
+    @BeforeAll
+    static void setupTestcontainers() {
         // Попытка запустить Testcontainers контейнеры
-        boolean testcontainersStarted = false;
         try {
             postgres = new PostgreSQLContainer<>("postgres:15-alpine")
                     .withDatabaseName("orderplatform")
@@ -33,11 +38,12 @@ public abstract class AbstractIntegrationTest {
 
             postgres.start();
             redis.start();
-            testcontainersStarted = true;
+            testcontainersAvailable = true;
             System.out.println("✓ Testcontainers контейнеры успешно запущены");
         } catch (Exception e) {
             System.out.println("⚠ Testcontainers не удалось запустить контейнеры: " + e.getMessage());
             System.out.println("  Проверьте доступность Docker и настройки в ~/.testcontainers.properties");
+            System.out.println("  Будем использовать внешние контейнеры (docker-compose/CI)");
             // Контейнеры не запущены, будем использовать внешние соединения
             postgres = null;
             redis = null;
@@ -46,7 +52,7 @@ public abstract class AbstractIntegrationTest {
 
     @DynamicPropertySource
     static void configureTestProperties(DynamicPropertyRegistry registry) {
-        if (postgres != null && postgres.isRunning()) {
+        if (testcontainersAvailable) {
             // Используем Testcontainers контейнеры
             registry.add("spring.datasource.url", postgres::getJdbcUrl);
             registry.add("spring.datasource.username", postgres::getUsername);

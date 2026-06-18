@@ -1,5 +1,10 @@
+/**
+ * Controller for Auth Service authentication endpoints.
+ * Provides endpoints for user registration, login, token refresh, and user info retrieval.
+ */
 package com.orderplatform.auth.controller;
 
+import com.orderplatform.auth.AuthConstants;
 import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserDto;
@@ -14,15 +19,23 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Controller for Auth Service authentication endpoints.
+ * Provides endpoints for user registration, login, token refresh, and user info retrieval.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -33,6 +46,12 @@ public class AuthController {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
 
+    /**
+     * Registers a new user.
+     *
+     * @param request the registration request containing user details
+     * @return the registered user DTO
+     */
     @PostMapping("/register")
     public ResponseEntity<UserDto> register(@Valid @RequestBody RegisterRequest request) {
         try {
@@ -43,6 +62,12 @@ public class AuthController {
         }
     }
 
+    /**
+     * Authenticates a user and returns tokens.
+     *
+     * @param request the login request containing email and password
+     * @return a map containing access token, refresh token, and user info
+     */
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
         try {
@@ -55,11 +80,17 @@ public class AuthController {
         }
     }
 
+    /**
+     * Refreshes the access token using refresh token.
+     *
+     * @param refreshToken the refresh token from Authorization header
+     * @return a map containing new access token, refresh token, and user info
+     */
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refreshToken(@RequestHeader("Authorization") String refreshToken) {
+    public ResponseEntity<Map<String, Object>> refreshToken(String refreshToken) {
         try {
             if (refreshToken != null && refreshToken.startsWith("Bearer ")) {
-                String token = refreshToken.substring(7);
+                String token = refreshToken.substring(AuthConstants.BEARER_PREFIX_LENGTH);
                 Map<String, Object> response = authenticationService.refreshToken(token);
                 return ResponseEntity.ok(response);
             }
@@ -71,6 +102,12 @@ public class AuthController {
         }
     }
 
+    /**
+     * Retrieves the current authenticated user information.
+     *
+     * @param userDetails the authenticated user details
+     * @return the user DTO for the current user
+     */
     @GetMapping("/me")
     public ResponseEntity<UserDto> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
@@ -83,31 +120,37 @@ public class AuthController {
         return ResponseEntity.ok(userMapper.toDto(user));
     }
 
+    /**
+     * Test endpoint to verify service is working.
+     *
+     * @return a success message
+     */
     @GetMapping("/test")
     public ResponseEntity<String> test() {
         return ResponseEntity.ok("Auth service is working!");
     }
 
-
+    /**
+     * Logs out the current user by revoking tokens.
+     *
+     * @param authHeader the Authorization header with access token
+     * @param refreshTokenFromHeader the optional refresh token from X-Refresh-Token header
+     * @return a map containing logout status
+     */
     @Operation(summary = "Logout", description = "Invalidates both access and refresh tokens")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully logged out"),
             @ApiResponse(responseCode = "401", description = "Invalid token")
     })
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenFromHeader) {
+    public ResponseEntity<Map<String, String>> logout(String authHeader,
+            String refreshTokenFromHeader) {
 
         try {
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String accessToken = authHeader.substring(7);
+                String accessToken = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
 
-                // Пытаемся получить refresh token из заголовка
                 String refreshToken = refreshTokenFromHeader;
-
-                // Если refresh token не передан в заголовке, пытаемся получить из тела запроса
-                // (для Swagger UI удобства)
 
                 authenticationService.logout(accessToken, refreshToken);
 

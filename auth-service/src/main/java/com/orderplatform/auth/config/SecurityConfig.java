@@ -1,3 +1,7 @@
+/**
+ * Security configuration class for Auth Service.
+ * Configures Spring Security with JWT authentication.
+ */
 package com.orderplatform.auth.config;
 
 import com.orderplatform.auth.security.JwtAuthenticationFilter;
@@ -26,6 +30,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import java.io.IOException;
 
+/**
+ * Security configuration class for Auth Service.
+ * Configures Spring Security with JWT authentication.
+ */
+@SuppressWarnings("DesignForExtension")
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -34,12 +43,18 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    /**
+     * Configures the security filter chain for HTTP requests.
+     *
+     * @param http the HTTP security builder
+     * @return the configured security filter chain
+     * @throws Exception if security configuration fails
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)  // Новый способ отключения CSRF
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // Swagger endpoints
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -48,7 +63,6 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
-                        // Public endpoints
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/health",
@@ -61,7 +75,8 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new CustomAuthenticationEntryPoint())
                         .accessDeniedHandler(new CustomAccessDeniedHandler())
@@ -70,6 +85,11 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Configures the authentication provider.
+     *
+     * @return the authentication provider bean
+     */
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -78,38 +98,57 @@ public class SecurityConfig {
         return authProvider;
     }
 
+    /**
+     * Configures the authentication manager.
+     *
+     * @param config the authentication configuration
+     * @return the authentication manager bean
+     * @throws Exception if authentication manager configuration fails
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
+    /**
+     * Configures the password encoder.
+     *
+     * @return the password encoder bean
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-
-    // Добавляем эти классы в SecurityConfig, чтобы можно было использовать их в других конфигурациях, например тот же файл или отдельно
-
+    /**
+     * Custom authentication entry point handler.
+     */
     class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
         @Override
-        public void commence(HttpServletRequest request, HttpServletResponse response,
-                             AuthenticationException authException) throws IOException, ServletException {
+        public void commence(HttpServletRequest request,
+                HttpServletResponse response,
+                AuthenticationException authException)
+                throws IOException, ServletException {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + authException.getMessage() + "\"}");
+            String message = authException.getMessage();
+            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}");
         }
     }
 
+    /**
+     * Custom access denied handler.
+     */
     class CustomAccessDeniedHandler implements AccessDeniedHandler {
         @Override
-        public void handle(HttpServletRequest request, HttpServletResponse response,
-                           org.springframework.security.access.AccessDeniedException accessDeniedException)
+        public void handle(HttpServletRequest request,
+                HttpServletResponse response,
+                org.springframework.security.access.AccessDeniedException accessDeniedException)
                 throws IOException, ServletException {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"" + accessDeniedException.getMessage() + "\"}");
+            String message = accessDeniedException.getMessage();
+            response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"" + message + "\"}");
         }
     }
-
 }

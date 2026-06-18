@@ -1,5 +1,10 @@
+/**
+ * JWT authentication filter for Spring Security.
+ * Validates JWT tokens on each request and sets authentication context.
+ */
 package com.orderplatform.auth.security;
 
+import com.orderplatform.auth.AuthConstants;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
 import com.orderplatform.auth.service.CustomUserDetailsService;
@@ -22,6 +27,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JWT authentication filter for Spring Security.
+ * Validates JWT tokens on each request and sets authentication context.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -32,6 +41,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final UserRepository userRepository;
 
+    /**
+     * Filters incoming requests and validates JWT token.
+     *
+     * @param request HTTP request
+     * @param response HTTP response
+     * @param filterChain filter chain
+     * @throws ServletException if filter chain processing fails
+     * @throws IOException if IO operation fails
+     */
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
@@ -46,13 +64,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
 
         try {
             final String userEmail = jwtService.extractUsername(jwt);
 
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                // Проверка черного списка
                 if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
                     log.warn("Token is blacklisted for user: {}", userEmail);
                     response.sendError(HttpStatus.UNAUTHORIZED.value(), "Token has been revoked");
@@ -61,13 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
-//                // Проверка активен ли пользователь(временно закомментирован)
                 User user = userRepository.findByEmail(userEmail).orElse(null);
-//                if (user == null || !user.isActive()) {
-//                    log.warn("User is not active: {}", userEmail);
-//                    response.sendError(HttpStatus.UNAUTHORIZED.value(), "User account is disabled");
-//                    return;
-//                }
 
                 if (jwtService.isTokenValid(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
