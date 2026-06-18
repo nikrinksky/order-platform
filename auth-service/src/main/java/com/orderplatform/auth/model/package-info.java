@@ -1,4 +1,4 @@
 /**
- * JPA entity models for Auth Service.
+ * JPA entity модели для Auth Service.
  */
 package com.orderplatform.auth.model;

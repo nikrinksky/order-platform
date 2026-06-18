@@ -1,4 +1,4 @@
 /**
- * Controller classes for Auth Service REST API.
+ * Классы контроллеров для REST API Auth Service.
  */
 package com.orderplatform.auth.controller;

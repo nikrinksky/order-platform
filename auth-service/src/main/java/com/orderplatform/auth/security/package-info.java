@@ -1,4 +1,4 @@
 /**
- * Security-related classes for Auth Service including JWT handling.
+ * Классы безопасности для Auth Service, включая обработку JWT.
  */
 package com.orderplatform.auth.security;

@@ -1,4 +1,4 @@
 /**
- * Exception handling classes for Auth Service.
+ * Классы обработки исключений для Auth Service.
  */
 package com.orderplatform.auth.exception;

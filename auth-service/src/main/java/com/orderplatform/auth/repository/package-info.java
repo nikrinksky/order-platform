@@ -1,4 +1,4 @@
 /**
- * Spring Data JPA repositories for Auth Service.
+ * Репозитории Spring Data JPA для Auth Service.
  */
 package com.orderplatform.auth.repository;

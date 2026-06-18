@@ -1,4 +1,4 @@
 /**
- * Service layer classes for Auth Service business logic.
+ * Классы сервисного слоя для бизнес-логики Auth Service.
  */
 package com.orderplatform.auth.service;

@@ -1,5 +1,5 @@
 /**
- * Configuration classes for Auth Service.
- * Includes database, security, Redis, and OpenAPI configurations.
+ * Конфигурационные классы для Auth Service.
+ * Включает конфигурации базы данных, безопасности, Redis и OpenAPI.
  */
 package com.orderplatform.auth.config;
