@@ -78,7 +78,7 @@ jobs:
         run: mvn checkstyle:check -Dcheckstyle.config.location=sun_checks.xml
 
       - name: Run Unit Tests with Coverage and Check
-        run: mvn test jacoco:report jacoco:check
+        run: mvn verify -DskipITs=true
 
       - name: Build JAR files
         run: mvn package -DskipTests
