@@ -92,6 +92,14 @@ jobs:
       - name: Run Integration Tests with Testcontainers
         run: mvn verify -Pintegration-tests
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y wget
+          wget -q https://github.com/aquasecurity/trivy/releases/download/v0.54.0/trivy_0.54.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.54.0_Linux-64bit.deb
+          trivy --version
+
       - name: Security Scan (Trivy)
         run: |
           for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
