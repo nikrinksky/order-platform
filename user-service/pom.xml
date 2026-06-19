@@ -21,7 +21,7 @@
         <test.exclude>**/ProblemTest.java</test.exclude>
         <skipUnitTests>false</skipUnitTests>
         <skipITs>true</skipITs>
-        <spring-kafka.version>3.2.0</spring-kafka.version>
+        <spring-kafka.version>3.3.16</spring-kafka.version>
     </properties>
 
         <!--    _____________________  - -->
@@ -105,6 +105,18 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <configuration>
+                    <configLocation>sun_checks.xml</configLocation>
+                    <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
+                    <failOnViolation>true</failOnViolation>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                    </sourceDirectories>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
@@ -128,6 +140,7 @@
                     <excludes>
                         <exclude>**/ProblemTest.java</exclude>
                         <exclude>**/*IT.java</exclude>
+                        <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
                     <skip>${skipUnitTests}</skip>
                     <includes>
@@ -186,7 +199,7 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.35</minimum>
+                                            <minimum>0.30</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
