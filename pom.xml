@@ -113,9 +113,6 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
-                <configuration>
-                    <skip>true</skip>
-                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -136,7 +133,6 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
-                            <skip>true</skip>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
