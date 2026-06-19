@@ -49,6 +49,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orderplatform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: dev123
+      SPRING_REDIS_HOST: localhost
+      SPRING_REDIS_PORT: '6379'
+      SPRING_DATA_MONGODB_URI: mongodb://admin:dev123@localhost:27017/orderplatform
+
     steps:
       - uses: actions/checkout@v4
 
@@ -69,11 +77,8 @@ jobs:
       - name: Run Checkstyle
         run: mvn checkstyle:check -Dcheckstyle.config.location=sun_checks.xml
 
-      - name: Run Unit Tests with Coverage
-        run: mvn test jacoco:report
-
-      - name: Verify Coverage >= 35%
-        run: mvn jacoco:check
+      - name: Run Unit Tests with Coverage and Check
+        run: mvn test jacoco:report jacoco:check
 
       - name: Build JAR files
         run: mvn package -DskipTests
