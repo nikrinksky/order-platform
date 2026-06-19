@@ -92,19 +92,61 @@ jobs:
       - name: Run Integration Tests with Testcontainers
         run: mvn verify -Pintegration-tests
 
-      - name: Install Trivy
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y wget
-          wget -q https://github.com/aquasecurity/trivy/releases/download/v0.54.0/trivy_0.54.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.54.0_Linux-64bit.deb
-          trivy --version
-
       - name: Security Scan (Trivy)
-        run: |
-          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
-            trivy image --severity CRITICAL --exit-code 1 order-platform/$service:pr-${{ github.event.number }} || exit 1
-          done
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/api-gateway:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - auth-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/auth-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - user-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/user-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - product-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/product-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - inventory-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/inventory-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - order-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/order-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Security Scan (Trivy) - notification-service
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: order-platform/notification-service:pr-${{ github.event.number }}
+          severity: 'CRITICAL'
+          exit-code: '1'
 
       - name: Upload Test Reports
         if: always()
