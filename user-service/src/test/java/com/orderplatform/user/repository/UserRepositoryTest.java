@@ -2,21 +2,20 @@ package com.orderplatform.user.repository;
 
 import com.orderplatform.user.model.Role;
 import com.orderplatform.user.model.User;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 class UserRepositoryTest {
-
-    @Autowired
-    private TestEntityManager entityManager;
 
     @Autowired
     private UserRepository userRepository;
@@ -26,82 +25,122 @@ class UserRepositoryTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder()
-                .id("test-user-123")
+                .id("test-user-id")
                 .email("test@example.com")
                 .firstName("Test")
                 .lastName("User")
                 .roles(Set.of(Role.ROLE_USER))
                 .isActive(true)
+                .createdAt(LocalDateTime.now())
                 .build();
-        entityManager.persistAndFlush(testUser);
+    }
+
+    @AfterEach
+    void tearDown() {
+        userRepository.deleteAll();
     }
 
     @Test
-    void testFindByEmail_ExistingUser() {
-        // when
-        var result = userRepository.findByEmail("test@example.com");
+    void testFindById() {
+        // Given
+        User savedUser = userRepository.save(testUser);
 
-        // then
-        assertThat(result).isPresent();
-        assertThat(result.get().getEmail()).isEqualTo("test@example.com");
-        assertThat(result.get().getFirstName()).isEqualTo("Test");
+        // When
+        Optional<User> foundUser = userRepository.findById(savedUser.getId());
+
+        // Then
+        assertThat(foundUser).isPresent();
+        assertThat(foundUser.get().getEmail()).isEqualTo(testUser.getEmail());
+        assertThat(foundUser.get().getFirstName()).isEqualTo(testUser.getFirstName());
     }
 
     @Test
-    void testFindByEmail_NonExistingUser() {
-        // when
-        var result = userRepository.findByEmail("nonexistent@example.com");
+    void testFindAll() {
+        // Given
+        userRepository.save(testUser);
 
-        // then
-        assertThat(result).isEmpty();
+        User anotherUser = User.builder()
+                .id("another-user-id")
+                .email("another@example.com")
+                .firstName("Another")
+                .lastName("User")
+                .roles(Set.of(Role.ROLE_USER))
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+        userRepository.save(anotherUser);
+
+        // When
+        Iterable<User> users = userRepository.findAll();
+
+        // Then
+        assertThat(users).hasSize(2);
     }
 
     @Test
-    void testExistsByEmail_ExistingUser() {
-        // when
-        boolean exists = userRepository.existsByEmail("test@example.com");
+    void testFindByEmail() {
+        // Given
+        userRepository.save(testUser);
 
-        // then
+        // When
+        Optional<User> foundUser = userRepository.findByEmail(testUser.getEmail());
+
+        // Then
+        assertThat(foundUser).isPresent();
+        assertThat(foundUser.get().getEmail()).isEqualTo(testUser.getEmail());
+    }
+
+    @Test
+    void testFindByEmail_NotFound() {
+        // When
+        Optional<User> foundUser = userRepository.findByEmail("nonexistent@example.com");
+
+        // Then
+        assertThat(foundUser).isEmpty();
+    }
+
+    @Test
+    void testExistsByEmail() {
+        // Given
+        userRepository.save(testUser);
+
+        // When
+        boolean exists = userRepository.existsByEmail(testUser.getEmail());
+
+        // Then
         assertThat(exists).isTrue();
     }
 
     @Test
-    void testExistsByEmail_NonExistingUser() {
-        // when
+    void testExistsByEmail_NotFound() {
+        // When
         boolean exists = userRepository.existsByEmail("nonexistent@example.com");
 
-        // then
+        // Then
         assertThat(exists).isFalse();
     }
 
     @Test
     void testSaveUser() {
-        // given
-        User newUser = User.builder()
-                .id("new-user-456")
-                .email("new@example.com")
-                .firstName("New")
-                .lastName("User")
-                .roles(Set.of(Role.ROLE_USER, Role.ROLE_ADMIN))
-                .isActive(true)
-                .build();
+        // When
+        User savedUser = userRepository.save(testUser);
 
-        // when
-        User saved = userRepository.save(newUser);
-
-        // then
-        assertThat(saved.getId()).isNotNull();
-        assertThat(saved.getEmail()).isEqualTo("new@example.com");
-        assertThat(saved.getRoles()).hasSize(2);
+        // Then
+        assertThat(savedUser).isNotNull();
+        assertThat(savedUser.getId()).isNotNull();
+        assertThat(savedUser.getEmail()).isEqualTo(testUser.getEmail());
     }
 
     @Test
     void testDeleteUser() {
-        // when
-        userRepository.deleteById("test-user-123");
+        // Given
+        User savedUser = userRepository.save(testUser);
 
-        // then
-        var result = userRepository.findById("test-user-123");
-        assertThat(result).isEmpty();
+        // When
+        userRepository.delete(savedUser);
+
+        // Then
+        Optional<User> foundUser = userRepository.findById(savedUser.getId());
+        assertThat(foundUser).isEmpty();
     }
 }

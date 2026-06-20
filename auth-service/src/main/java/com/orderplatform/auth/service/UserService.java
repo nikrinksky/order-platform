@@ -1,3 +1,7 @@
+/**
+ * Service for user operations.
+ * Handles user registration and Kafka event publishing.
+ */
 package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.RegisterRequest;
@@ -16,6 +20,10 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
 
+/**
+ * Service for user operations.
+ * Handles user registration and Kafka event publishing.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -25,9 +33,16 @@ public class UserService {
     private final UserMapper userMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    /**
+     * Registers a new user.
+     *
+     * @param request the registration request containing user details
+     * @return the registered user DTO
+     */
     public UserDto register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("User with email " + request.getEmail() + " already exists");
+            String msg = "User with email " + request.getEmail() + " already exists";
+            throw new RuntimeException(msg);
         }
 
         User user = User.builder()
@@ -37,18 +52,20 @@ public class UserService {
                 .lastName(request.getLastName())
                 .roles(Set.of(Role.ROLE_USER))
                 .isActive(true)
-//                .isEmailVerified(false)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-
-        // Отправка события в Kafka
         sendUserCreatedEvent(savedUser);
 
         return userMapper.toDto(savedUser);
     }
 
+    /**
+     * Sends a user created event to Kafka.
+     *
+     * @param user the saved user entity
+     */
     private void sendUserCreatedEvent(User user) {
         try {
             UserCreatedEvent event = UserCreatedEvent.builder()
