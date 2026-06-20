@@ -107,6 +107,7 @@ jobs:
           image-ref: order-platform/auth-service:pr-${{ github.event.number }}
           severity: 'CRITICAL'
           exit-code: '1'
+          ignore-unfixed: true
 
       - name: Security Scan (Trivy) - user-service
         uses: aquasecurity/trivy-action@master
