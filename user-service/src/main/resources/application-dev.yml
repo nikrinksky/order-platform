@@ -7,6 +7,10 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: user_profile
   kafka:
     enabled: true
     bootstrap-servers: localhost:19092  # Внешний порт Redpanda

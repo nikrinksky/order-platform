@@ -55,6 +55,25 @@ services:
       - order-network
 
 
+  user-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: userplatform
+      POSTGRES_PASSWORD: dev123
+    ports:
+      - "5433:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U userplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - order-network
+
   # ============= KAFKA (REDPANDA) =============
   redpanda:
     image: redpandadata/redpanda:v23.3.1
@@ -182,13 +201,13 @@ services:
       - "8082:8082"
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderplatform
-      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: userplatform
       SPRING_DATASOURCE_PASSWORD: dev123
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      postgres:
+      user-db:
         condition: service_healthy
       redpanda:
         condition: service_healthy
@@ -253,3 +272,4 @@ volumes:
   mongodb_data:
   redis_data:
   redpanda_data:
+  user_db_data:

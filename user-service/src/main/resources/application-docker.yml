@@ -4,6 +4,11 @@ spring:
     username: platform
     password: dev123
 
+  jpa:
+    properties:
+      hibernate:
+        default_schema: user_profile
+
   kafka:
     bootstrap-servers: redpanda:9092
     consumer:
@@ -20,4 +25,3 @@ logging:
   level:
     com.orderplatform.user: INFO
     org.springframework.kafka: INFO
-
