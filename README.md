@@ -32,8 +32,14 @@ order-platform/
 # Запуск всей инфраструктуры + сервисов
 docker-compose up -d
 
+# Инициализация схем баз данных (для auth-service и user-service)
+.\init-db-schemas.ps1
+
 # Остановка
 docker-compose down
+
+# Остановка с удалением volumes
+docker-compose down -v
 
 # Просмотр логов
 docker-compose logs -f
@@ -151,9 +157,41 @@ Testcontainers на Linux работают без проблем через Unix
 |------------|-----|-------|--------|
 | API Gateway | http://localhost:8080 | - | - |
 | Auth Service | http://localhost:8090 | - | - |
+| User Service | http://localhost:8082 | - | - |
 | pgAdmin | http://localhost:5050 | admin@orderplatform.com | admin |
 | mongo-express | http://localhost:8087 | admin | admin |
 | redis-commander | http://localhost:8088 | - | - |
+
+## Базы данных
+
+### PostgreSQL (auth-service)
+- **Container**: `postgres`
+- **Порт (host)**: `localhost:5432`
+- **Порт (container)**: `5432`
+- **База**: `orderplatform`
+- **Схема**: `auth`
+- **Пользователь**: `platform`
+- **Пароль**: `dev123`
+
+### PostgreSQL (user-service)
+- **Container**: `user-db`
+- **Порт (host)**: `localhost:5433`
+- **Порт (container)**: `5432`
+- **База**: `userdb`
+- **Схема**: `user_profile`
+- **Пользователь**: `userplatform`
+- **Пароль**: `dev123`
+
+### Инициализация схем
+
+После первого запуска контейнеров выполните скрипт инициализации:
+```powershell
+.\init-db-schemas.ps1
+```
+
+Этот скрипт создаст:
+- Схему `auth` и таблицы в `postgres:5432`
+- Схему `user_profile` и таблицы в `user-db:5433`
 
 ## Разработка
 
@@ -192,21 +230,82 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 
 ## Технологии
 
-- **Backend**: Spring Boot 3.2.0, Java 17
+- **Backend**: Spring Boot 3.2.12, Java 17
 - **Database**: PostgreSQL 15, MongoDB 7, Redis 7
 - **Messaging**: Kafka (Redpanda)
+- **Security**: Spring Security 6.5.9 (CVE-2026-22732 fixed)
 - **Containerization**: Docker, Docker Compose
 - **Monitoring**: Spring Actuator
 
+### Архитектура
+
+Проект использует **Event-Driven Projection Architecture**:
+
+- **auth-service**: Хранит полную модель пользователя (с паролем) в схеме `auth` базы `orderplatform`
+- **user-service**: Хранит проекцию пользователя (без пароля) в схеме `user_profile` базы `userdb`
+- **Интеграция**: Через Kafka события `user.created` и `user.updated`
+
+Детальное описание архитектурных изменений см. в [CHANGES.md](CHANGES.md)
+
 ## Статус сервисов
 
-- ✅ auth-service
+- ✅ auth-service (с полной моделью пользователя в схеме `auth`)
 - ✅ api-gateway
-- ✅ user-service
+- ✅ user-service (с проекцией пользователя в схеме `user_profile`)
 - ⏳ product-service
 - ⏳ inventory-service
 - ⏳ order-service
 - ⏳ notification-service
+
+### Архитектурные изменения
+
+| Изменение | Статус |
+|-----------|--------|
+| Разделение БД (auth-service и user-service) | ✅ Завершено |
+| Новые схемы: `auth` и `user_profile` | ✅ Завершено |
+| Kafka события: `user.created` и `user.updated` | ✅ Завершено |
+| Инициализация схем (init-db-schemas.ps1) | ✅ Завершено |
+| Spring Security 6.5.9 (CVE-2026-22732) | ✅ Завершено |
+
+---
+
+## Устранение проблем
+
+### Ошибка: schema "auth" does not exist
+
+**Проблема:**
+При выполнении тестов возникала ошибка `ERROR: schema "auth" does not exist` при попытке создать таблицы `auth.users` и `auth.user_roles`.
+
+**Причина:**
+Hibernate настроен на создание таблиц в схеме `auth`, но сама схема не была создана до создания таблиц.
+
+**Решение:**
+Создан файл `schema-test.sql` в `auth-service/src/test/resources/`:
+```sql
+-- Инициализация схемы auth для тестов
+CREATE SCHEMA IF NOT EXISTS auth;
+```
+
+Обновлена конфигурация тестирования в `application-test.yml`:
+```yaml
+spring:
+  datasource:
+    initialization-mode: always
+    continue-on-error: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+```
+
+**Результат:**
+Все 13 тестов прошли успешно:
+- AuthControllerTest: 2/2 ✅
+- UserRepositoryTest: 3/3 ✅
+- JwtServiceTest: 4/4 ✅
+- AuthenticationServiceTest: 2/2 ✅
+- UserServiceTest: 2/2 ✅
+
+---
 
 ## Лицензия
 

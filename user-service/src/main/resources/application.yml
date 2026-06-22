@@ -9,6 +9,9 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        default_schema: user_profile
   kafka:
     enabled: false  # Отключено по умолчанию, включается через profiles (docker/dev)
     consumer:

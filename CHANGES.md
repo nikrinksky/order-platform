@@ -123,3 +123,162 @@ cd auth-service
 2. Добавить недостающие сервисы (product-service, inventory-service, order-service, notification-service)
 3. Настроить JWT секрет для production
 4. Добавить мониторинг (Prometheus, Grafana)
+
+---
+
+# Архитектурные изменения: Event-Driven Projection
+
+## Что было изменено
+
+### 1. ✅ Разделение баз данных
+- **До**: auth-service и user-service использовали одну БД и таблицу `users`
+- **После**: Каждый сервис имеет отдельную БД и схему
+
+#### Новые сервисы:
+- **postgres (порт 5432)**: База `orderplatform` со схемой `auth`
+- **user-db (порт 5433)**: База `userdb` со схемой `user_profile`
+
+### 2. ✅ Структура таблиц
+
+#### auth.users (auth-service)
+- `id` (VARCHAR) - UUID пользователя
+- `username` (VARCHAR) - логин
+- `email` (VARCHAR) - email
+- `password` (VARCHAR) - **хэшированный пароль**
+- `first_name` (VARCHAR)
+- `last_name` (VARCHAR)
+- `is_active` (BOOLEAN)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+- `last_login` (TIMESTAMP)
+- `user_roles` - связь с таблицей ролей
+
+#### user_profile.users (user-service)
+- `id` (BIGSERIAL) - auto-increment ID
+- `username` (VARCHAR) - логин
+- `email` (VARCHAR) - email
+- `first_name` (VARCHAR)
+- `last_name` (VARCHAR)
+- `is_active` (BOOLEAN)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
+- **ВАЖНО**: Поле `password` отсутствует
+
+### 3. ✅ Kafka события
+
+#### user.created
+```json
+{
+  "id": "uuid-123",
+  "email": "user@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "roles": ["ROLE_USER"],
+  "isActive": true,
+  "createdAt": "2026-06-22T12:00:00Z"
+}
+```
+- Отправляется при регистрации нового пользователя
+- Пользователь user-service создает проекцию в `user_profile.users`
+
+#### user.updated
+```json
+{
+  "id": "uuid-123",
+  "email": "user@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "roles": ["ROLE_USER"],
+  "isActive": true,
+  "updatedAt": "2026-06-22T12:00:00Z"
+}
+```
+- Отправляется при обновлении данных пользователя
+- Пользователь user-service обновляет проекцию в `user_profile.users`
+
+### 4. ✅ Конфигурация Kafka
+
+#### auth-service (отправитель)
+- `KafkaTemplate<String, Object>` для отправки событий
+- Topic: `user.created`, `user.updated`
+
+#### user-service (консьюмер)
+- `@KafkaListener` для обработки событий
+- Группа: `user-service-group`
+- Темы: `user.created`, `user.updated`
+
+### 5. ✅ Инициализация схем
+
+#### init-db-schemas.ps1
+PowerShell скрипт для создания схем после запуска контейнеров:
+```powershell
+# Создает схему auth и таблицы в postgres:5432
+# Создает схему user_profile и таблицы в user-db:5433
+```
+
+Запуск:
+```powershell
+.\init-db-schemas.ps1
+```
+
+### 6. ✅ Обновленные файлы
+
+| Файл | Изменения |
+|------|-----------|
+| `docker-compose.yaml` | Добавлен user-db сервис на порту 5433 |
+| `auth-service/src/main/resources/application*.yml` | Добавлен `hibernate.default_schema: auth` |
+| `user-service/src/main/resources/application*.yml` | Добавлен `hibernate.default_schema: user_profile` |
+| `auth-service/src/main/java/.../model/User.java` | Удален `@Table(schema="auth")` |
+| `user-service/src/main/java/.../model/User.java` | Удалено поле password, удален `@Table(schema="user")` |
+| `auth-service/src/main/java/.../UserService.java` | Добавлен метод `updateUser` и отправка `user.updated` |
+| `user-service/src/main/java/.../UserConsumerService.java` | Добавлен обработчик `user.updated` |
+| `auth-service/pom.xml` | Spring Security 6.5.9 |
+| `user-service/pom.xml` | Spring Security 6.5.9 |
+| `init-db-schemas.ps1` | Новый скрипт инициализации схем |
+
+### 7. ✅ Проверка результатов
+
+#### Схемы баз данных
+```sql
+-- auth-service
+\dn auth
+\dt auth.users
+
+-- user-service
+\dn user_profile  
+\dt user_profile.users
+```
+
+#### Kafka топики
+```bash
+# Список топиков
+rpk topic list
+# Должны быть: user.created, user.updated
+```
+
+#### Статус контейнеров
+```powershell
+docker-compose ps
+```
+Все контейнеры должны быть `healthy`
+
+### 8. ✅ Преимущества новой архитектуры
+
+1. **Независимость**: auth-service и user-service имеют отдельные БД
+2. **Безопасность**: Пароль не хранится в user-service
+3. **Масштабируемость**: Сервисы масштабируются независимо
+4. **Асинхронность**: Синхронизация через Kafka без прямых вызовов
+5. **Гибкость**: Можно изменять структуру проекции без влияния на auth-service
+
+### 9. ⚠️ Известные ограничения
+
+1. **Задержка синхронизации**: Проекция обновляется асинхронно через Kafka
+2. **Потенциальная потеря данных**: Если user-service недоступен, события накапливаются в Kafka
+3. **Дублирование данных**: email, first_name, last_name хранятся в обеих БД
+
+### 10. 📋 Дальнейшие улучшения
+
+- Добавить CDC (Change Data Capture) для автоматической синхронизации
+- Реализовать retry механизм для обработки ошибок Kafka
+- Добавить мониторинг задержек синхронизации
+- Рассмотреть использование Debezium для CDC

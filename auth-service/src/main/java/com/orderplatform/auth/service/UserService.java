@@ -1,12 +1,13 @@
 /**
  * Service for user operations.
- * Handles user registration and Kafka event publishing.
+ * Handles user registration, updates and Kafka event publishing.
  */
 package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserCreatedEvent;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.dto.UserUpdatedEvent;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
@@ -22,7 +23,7 @@ import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
 
 /**
  * Service for user operations.
- * Handles user registration and Kafka event publishing.
+ * Handles user registration, updates and Kafka event publishing.
  */
 @Service
 @RequiredArgsConstructor
@@ -62,6 +63,27 @@ public class UserService {
     }
 
     /**
+     * Updates an existing user.
+     *
+     * @param userId the user ID to update
+     * @param request the update request containing user details
+     * @return the updated user DTO
+     */
+    public UserDto updateUser(String userId, RegisterRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+
+        User updatedUser = userRepository.save(user);
+
+        sendUserUpdatedEvent(updatedUser);
+
+        return userMapper.toDto(updatedUser);
+    }
+
+    /**
      * Sends a user created event to Kafka.
      *
      * @param user the saved user entity
@@ -84,6 +106,32 @@ public class UserService {
             log.info("UserCreatedEvent sent for user: {}", user.getEmail());
         } catch (Exception e) {
             log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Sends a user updated event to Kafka.
+     *
+     * @param user the updated user entity
+     */
+    private void sendUserUpdatedEvent(User user) {
+        try {
+            UserUpdatedEvent event = UserUpdatedEvent.builder()
+                    .id(user.getId())
+                    .email(user.getEmail())
+                    .firstName(user.getFirstName())
+                    .lastName(user.getLastName())
+                    .roles(user.getRoles().stream()
+                            .map(Enum::name)
+                            .collect(Collectors.toSet()))
+                    .isActive(user.isActive())
+                    .updatedAt(user.getUpdatedAt())
+                    .build();
+
+            kafkaTemplate.send("user.updated", user.getId(), event);
+            log.info("UserUpdatedEvent sent for user: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
         }
     }
 }
