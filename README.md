@@ -267,6 +267,46 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 | Инициализация схем (init-db-schemas.ps1) | ✅ Завершено |
 | Spring Security 6.5.9 (CVE-2026-22732) | ✅ Завершено |
 
+---
+
+## Устранение проблем
+
+### Ошибка: schema "auth" does not exist
+
+**Проблема:**
+При выполнении тестов возникала ошибка `ERROR: schema "auth" does not exist` при попытке создать таблицы `auth.users` и `auth.user_roles`.
+
+**Причина:**
+Hibernate настроен на создание таблиц в схеме `auth`, но сама схема не была создана до создания таблиц.
+
+**Решение:**
+Создан файл `schema-test.sql` в `auth-service/src/test/resources/`:
+```sql
+-- Инициализация схемы auth для тестов
+CREATE SCHEMA IF NOT EXISTS auth;
+```
+
+Обновлена конфигурация тестирования в `application-test.yml`:
+```yaml
+spring:
+  datasource:
+    initialization-mode: always
+    continue-on-error: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+```
+
+**Результат:**
+Все 13 тестов прошли успешно:
+- AuthControllerTest: 2/2 ✅
+- UserRepositoryTest: 3/3 ✅
+- JwtServiceTest: 4/4 ✅
+- AuthenticationServiceTest: 2/2 ✅
+- UserServiceTest: 2/2 ✅
+
+---
+
 ## Лицензия
 
 MIT

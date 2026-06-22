@@ -5,6 +5,10 @@ spring:
     password: dev123
     driver-class-name: org.postgresql.Driver
 
+    # Инициализация схемы перед созданием таблиц
+    initialization-mode: always
+    continue-on-error: false
+
   jpa:
     hibernate:
       ddl-auto: create-drop
