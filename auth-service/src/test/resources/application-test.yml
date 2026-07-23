@@ -1,20 +1,20 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: jdbc:postgresql://localhost:5432/orderplatform
+    username: platform
+    password: dev123
+    driver-class-name: org.postgresql.Driver
 
     # Инициализация схемы перед созданием таблиц (Spring Boot 3.x)
     sql:
       init:
         mode: always
-        continue-on-error: false
+        continue-on-error: true
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -34,13 +34,8 @@ jwt:
 
 logging:
   level:
-    com.orderplatform.auth: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.test: DEBUG
-
----
-# H2 Console and driver for tests
-spring:
-  h2:
-    console:
-      enabled: false
+    com.orderplatform.auth: INFO
+    org.springframework.security: WARN
+    org.springframework.test: INFO
+    org.springframework.jdbc: INFO
+    org.postgresql: WARN
