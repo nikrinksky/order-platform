@@ -52,7 +52,19 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.12</spring-boot.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <bouncycastle.version>1.80.2</bouncycastle.version>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Central Repository</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
 
     <dependencyManagement>
@@ -78,6 +90,27 @@
                 <version>6.5.9</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Force Spring Security artifacts version -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-web</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-config</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-core</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-crypto</artifactId>
+                <version>6.5.9</version>
             </dependency>
             <!-- Test dependencies -->
             <dependency>
@@ -160,5 +193,16 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.1</version>
+                <configuration>
+                    <retryFailedDeploymentAttempts>3</retryFailedDeploymentAttempts>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 </project>
