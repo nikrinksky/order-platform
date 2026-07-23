@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U platform"]
+      test: ["CMD-SHELL", "pg_isready -U platform -d orderplatform"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,8 +65,10 @@ services:
       - "5433:5432"
     volumes:
       - user_db_data:/var/lib/postgresql/data
+      - ./user-db-postgres.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U userplatform"]
+      test: ["CMD-SHELL", "pg_isready -U userplatform -d userdb"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -157,6 +159,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: auth
       JWT_SECRET: ${JWT_SECRET}
 
     depends_on:
@@ -205,6 +208,7 @@ services:
       SPRING_DATASOURCE_USERNAME: userplatform
       SPRING_DATASOURCE_PASSWORD: dev123
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       user-db:
@@ -225,6 +229,8 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@orderplatform.com
       PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_DEFAULT_SERVERS: >-
+        [{"name":"postgres","host":"postgres","port":5432,"maintenance_db":"orderplatform","username":"platform","password":"dev123","ssl_mode":"prefer","timeout":5}]
     networks:
       - order-network
     depends_on:
@@ -257,10 +263,14 @@ services:
       - "8088:8081"
     environment:
       REDIS_HOSTS: default:redis:6379:0:dev123
+      MONGO_HOSTS: default:mongodb:27017:admin:dev123
+      POSTGRES_HOSTS: default:postgres:5432:platform:dev123:orderplatform
     networks:
       - order-network
     depends_on:
       - redis
+      - mongodb
+      - postgres
     restart: unless-stopped
 
 networks:

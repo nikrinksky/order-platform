@@ -20,6 +20,9 @@ public class User {
     @Id
     private String id;
 
+    @Column(name = "username", unique = true, nullable = false)
+    private String username;
+
     @Column(unique = true, nullable = false)
     private String email;
 

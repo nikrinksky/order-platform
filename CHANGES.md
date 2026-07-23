@@ -63,6 +63,96 @@
 - Описаны все сервисы и порты
 - Приведены команды для локального и Docker запуска
 
+### 9. ✅ Обновление Docker-контейнеров
+
+#### docker-compose.yaml
+- **auth-service**: Добавлена переменная `SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: auth` для корректной работы с схемой `auth`
+- **user-service**: Конфигурация оставлена без изменений (использует схему `user_profile` по умолчанию)
+
+#### Dockerfile
+- **auth-service**: Уже настроен правильно
+  ```Dockerfile
+  FROM amazoncorretto:17-alpine
+  RUN apk add --no-cache curl
+  WORKDIR /app
+  COPY target/*.jar app.jar
+  EXPOSE 8090
+  ENTRYPOINT ["java", "-jar", "app.jar"]
+  ```
+- **user-service**: Уже настроен правильно
+- **api-gateway**: Уже настроен правильно
+
+#### Проверка конфигурации
+```bash
+# Запуск контейнеров
+docker-compose up -d
+
+# Проверка логов auth-service
+docker-compose logs -f auth-service
+
+# Проверка доступности
+curl http://localhost:8090/actuator/health
+```
+
+### 10. ✅ CVE-2026-22732 исправлен
+
+#### Проблема
+Refresh endpoint мог принять access token в качестве refresh token, так как не было различия в типах токенов.
+
+#### Решение
+1. **JwtService.java:**
+   - Добавлен claim `token_use` ("access" или "refresh") в JWT токены
+   - `extractTokenType()` - извлекает тип токена
+   - `isAccessToken()` - проверяет, является ли токен access token
+   - `isRefreshToken()` - проверяет, является ли токен refresh token
+   - `isRefreshTokenValid()` - валидирует только refresh tokens
+
+2. **AuthenticationService.java:**
+   - **ПЕРВАЯ** проверка: `jwtService.isRefreshToken(refreshToken)` (выполняется ДО обращения к БД)
+   - **ВТОРАЯ** проверка: `jwtService.isRefreshTokenValid(refreshToken)`
+   - `RuntimeException` с оригинальным сообщением не перехватывается
+
+#### Результат
+- Access token больше не может использоваться для refresh endpoint
+- CVE-2026-22732 исправлен
+- Все 14 тестов проходят успешно
+
+### 11. ✅ Исправление ошибки "relation user_profile.users does not exist"
+
+#### Проблема
+При запуске user-service в Docker возникала ошибка:
+```
+ERROR: relation "user_profile.users" does not exist
+```
+
+#### Причина
+1. Схема `user_profile` не была создана в базе данных `userdb`
+2. Скрипт `init-db-schemas.ps1` использовал `BIGSERIAL` вместо `VARCHAR(255)` для `id`
+3. Dockerfile user-service не устанавливал `curl` для health check
+
+#### Решение
+1. **Исправлен `init-db-schemas.ps1`:**
+   - Используется `VARCHAR(255)` для `id` (UUID)
+   - Добавлена таблица `user_roles`
+   - Добавлены индексы
+
+2. **Обновлен `Dockerfile` user-service:**
+   - Добавлена установка `curl` для health check
+   - Теперь совместим с auth-service
+
+3. **Создан `schema.sql` для user-service:**
+   - Автоматически создает схему и таблицы при запуске
+   - Используется `hibernate.default_schema: user_profile`
+
+4. **Обновлена конфигурация `application.yml`:**
+   - Добавлена настройка `initialization-mode: always`
+   - Добавлен профиль `docker` с правильной конфигурацией
+
+#### Результат
+- Схема `user_profile` создается автоматически
+- Все 35 тестов проходят успешно
+- Docker контейнер user-service работает корректно
+
 ## Проверка работоспособности
 
 ### Проверка Maven Wrapper
@@ -276,7 +366,39 @@ docker-compose ps
 2. **Потенциальная потеря данных**: Если user-service недоступен, события накапливаются в Kafka
 3. **Дублирование данных**: email, first_name, last_name хранятся в обеих БД
 
-### 10. 📋 Дальнейшие улучшения
+### 10. ⚠️ Известные ограничения
+
+1. **Задержка синхронизации**: Проекция обновляется асинхронно через Kafka
+2. **Потенциальная потеря данных**: Если user-service недоступен, события накапливаются в Kafka
+3. **Дублирование данных**: email, first_name, last_name хранятся в обеих БД
+
+### 11. 🛡️ Исправление уязвимости безопасности (CVE-2026-22732)
+
+#### Проблема
+Refresh endpoint мог принять access token в качестве refresh token, поскольку не было различия в типах токенов.
+
+#### Решение
+- Добавлен claim `token_use` ("access" или "refresh") в JWT токены
+- Обновлен `JwtService`:
+  - `extractTokenType()` - извлекает тип токена
+  - `isAccessToken()` - проверяет, является ли токен access token
+  - `isRefreshToken()` - проверяет, является ли токен refresh token
+  - `isRefreshTokenValid()` - валидирует только refresh tokens
+- Обновлен `AuthenticationService.refreshToken()`:
+  - **ПЕРВАЯ** проверка: `jwtService.isRefreshToken(refreshToken)`
+  - **ВТОРАЯ** проверка: `jwtService.isRefreshTokenValid(refreshToken)`
+  - Проверка типа токена выполняется **ДО** получения данных из БД
+  - `RuntimeException` с оригинальным сообщением не перехватывается в блоке `catch`
+
+#### Тесты
+- `testRefreshToken_Success()` - проверяет успешное обновление refresh token
+- `testRefreshToken_Fail_WhenAccessTokenUsed()` - проверяет, что access token **отклоняется**
+
+#### Результат
+- Access token больше не может использоваться для refresh endpoint
+- CVE-2026-22732 исправлен
+
+### 12. 📋 Дальнейшие улучшения
 
 - Добавить CDC (Change Data Capture) для автоматической синхронизации
 - Реализовать retry механизм для обработки ошибок Kafka

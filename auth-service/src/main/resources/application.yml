@@ -4,9 +4,14 @@ spring:
     name: auth-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:host.docker.internal}:5432/orderplatform
-    username: ${DB_USER:platform}
-    password: ${DB_PASSWORD:dev123}
+    url: jdbc:postgresql://localhost:5432/orderplatform
+    username: platform
+    password: dev123
+
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
 
   jpa:
     hibernate:
@@ -149,6 +154,11 @@ spring:
     username: platform
     password: dev123
 
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+
   data:
     redis:
       host: redis
@@ -173,6 +183,7 @@ spring:
       properties:
         spring.json.value.default.to.string: true
         spring.json.add.type.headers: false
+        compression.type: none
     consumer:
       group-id: auth-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer

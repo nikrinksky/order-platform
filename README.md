@@ -182,6 +182,34 @@ Testcontainers на Linux работают без проблем через Unix
 - **Пользователь**: `userplatform`
 - **Пароль**: `dev123`
 
+### Docker Variables
+
+#### auth-service
+```yaml
+environment:
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderplatform
+  SPRING_DATASOURCE_USERNAME: platform
+  SPRING_DATASOURCE_PASSWORD: dev123
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: 6379
+  SPRING_DATA_REDIS_PASSWORD: dev123
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+  SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: auth  # ✅ Используется схема auth
+  JWT_SECRET: ${JWT_SECRET}
+```
+
+#### user-service
+```yaml
+environment:
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+  SPRING_DATASOURCE_USERNAME: userplatform
+  SPRING_DATASOURCE_PASSWORD: dev123
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+  JWT_SECRET: ${JWT_SECRET}
+```
+
 ### Инициализация схем
 
 После первого запуска контейнеров выполните скрипт инициализации:
@@ -265,7 +293,7 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 | Новые схемы: `auth` и `user_profile` | ✅ Завершено |
 | Kafka события: `user.created` и `user.updated` | ✅ Завершено |
 | Инициализация схем (init-db-schemas.ps1) | ✅ Завершено |
-| Spring Security 6.5.9 (CVE-2026-22732) | ✅ Завершено |
+| Spring Security 6.5.9 (CVE-2026-22732 fixed) | ✅ Завершено |
 
 ---
 
@@ -304,6 +332,39 @@ spring:
 - JwtServiceTest: 4/4 ✅
 - AuthenticationServiceTest: 2/2 ✅
 - UserServiceTest: 2/2 ✅
+
+---
+
+### Ошибка: JWT token exchange vulnerability (CVE-2026-22732)
+
+**Проблема:**
+Refresh endpoint мог принять access token в качестве refresh token, поскольку не было различия в типах токенов.
+
+**Причина:**
+Метод `jwtService.isTokenValid()` не проверял тип токена, поэтому access token проходил валидацию как refresh token.
+
+**Решение:**
+1. **Обновлен `JwtService`:**
+   - Добавлен claim `token_use` ("access" или "refresh") в JWT токены
+   - `extractTokenType()` - извлекает тип токена
+   - `isAccessToken()` - проверяет, является ли токен access token
+   - `isRefreshToken()` - проверяет, является ли токен refresh token
+   - `isRefreshTokenValid()` - валидирует только refresh tokens
+
+2. **Обновлен `AuthenticationService.refreshToken()`:**
+   - **ПЕРВАЯ** проверка: `jwtService.isRefreshToken(refreshToken)` (выполняется ДО обращения к БД)
+   - **ВТОРАЯ** проверка: `jwtService.isRefreshTokenValid(refreshToken)`
+   - `RuntimeException` с оригинальным сообщением не перехватывается в блоке `catch`
+
+**Результат:**
+- Access token больше не может использоваться для refresh endpoint
+- CVE-2026-22732 исправлен
+- Все тесты проходят успешно (14/14):
+  - AuthenticationControllerTest: 2/2 ✅
+  - UserRepositoryTest: 3/3 ✅
+  - JwtServiceTest: 4/4 ✅
+  - AuthenticationServiceTest: 3/3 ✅ (добавлен тест для проверки запрета access token)
+  - UserServiceTest: 2/2 ✅
 
 ---
 

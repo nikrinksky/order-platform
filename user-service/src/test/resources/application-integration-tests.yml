@@ -2,13 +2,21 @@ spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/orderplatform
-    username: platform
+    url: jdbc:postgresql://localhost:5433/userdb
+    username: userplatform
     password: dev123
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: user_profile
   kafka:
     enabled: false
     bootstrap-servers: ""  # Пустое значение отключает Kafka

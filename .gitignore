@@ -45,3 +45,8 @@ build/
 ### Maven ###
 effective-pom
 /.gigacode/plans/1781814673396-tidy-canyon.plan.md
+CHANGES.md
+/RUNTIME_FIXES.md
+/register-user-final.json
+/register-user.json
+/register-user-new.json

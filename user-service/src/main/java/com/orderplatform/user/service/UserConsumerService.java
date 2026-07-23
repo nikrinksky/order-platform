@@ -33,6 +33,7 @@ public class UserConsumerService {
 
             User user = User.builder()
                     .id(event.getId())
+                    .username(event.getUsername())
                     .email(event.getEmail())
                     .firstName(event.getFirstName())
                     .lastName(event.getLastName())
@@ -61,6 +62,7 @@ public class UserConsumerService {
                 
                 User updatedUser = User.builder()
                         .id(user.getId())
+                        .username(event.getUsername())
                         .email(user.getEmail())
                         .firstName(event.getFirstName())
                         .lastName(event.getLastName())

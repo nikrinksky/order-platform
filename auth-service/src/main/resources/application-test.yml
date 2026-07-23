@@ -1,13 +1,15 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:${spring.test.database.port:5432}/orderplatform
-    username: platform
-    password: dev123
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
 
-    # Инициализация схемы перед созданием таблиц
-    initialization-mode: always
-    continue-on-error: false
+    # Инициализация схемы перед созданием таблиц (Spring Boot 3.x)
+    sql:
+      init:
+        mode: always
+        continue-on-error: false
 
   jpa:
     hibernate:
@@ -15,16 +17,12 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         default_schema: auth
 
   data:
     redis:
-      host: localhost
-      port: ${spring.test.redis.port:6379}
-      password: dev123
-      timeout: 2000ms
+      enabled: false
 
   kafka:
     enabled: false
@@ -39,3 +37,10 @@ logging:
     com.orderplatform.auth: DEBUG
     org.springframework.security: DEBUG
     org.springframework.test: DEBUG
+
+---
+# H2 Console and driver for tests
+spring:
+  h2:
+    console:
+      enabled: false

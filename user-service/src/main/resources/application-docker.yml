@@ -1,15 +1,22 @@
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/orderplatform
-    username: platform
+    url: jdbc:postgresql://user-db:5432/userdb
+    username: userplatform
     password: dev123
-
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
   jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
     properties:
       hibernate:
+        format_sql: true
         default_schema: user_profile
-
   kafka:
+    enabled: true
     bootstrap-servers: redpanda:9092
     consumer:
       group-id: user-service-group
@@ -24,4 +31,4 @@ server:
 logging:
   level:
     com.orderplatform.user: INFO
-    org.springframework.kafka: INFO
+    org.springframework.kafka: DEBUG

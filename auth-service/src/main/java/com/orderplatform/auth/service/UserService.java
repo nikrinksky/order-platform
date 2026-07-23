@@ -92,6 +92,7 @@ public class UserService {
         try {
             UserCreatedEvent event = UserCreatedEvent.builder()
                     .id(user.getId())
+                    .username(user.getEmail())
                     .email(user.getEmail())
                     .firstName(user.getFirstName())
                     .lastName(user.getLastName())
