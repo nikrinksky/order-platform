@@ -26,6 +26,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      userdb:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: userdb
+          POSTGRES_USER: userplatform
+          POSTGRES_PASSWORD: dev123
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -53,6 +67,9 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orderplatform
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: dev123
+      USER_DB_URL: jdbc:postgresql://localhost:5433/userdb
+      USER_DB_USERNAME: userplatform
+      USER_DB_PASSWORD: dev123
       SPRING_REDIS_HOST: localhost
       SPRING_REDIS_PORT: '6379'
       SPRING_DATA_MONGODB_URI: mongodb://admin:dev123@localhost:27017/orderplatform

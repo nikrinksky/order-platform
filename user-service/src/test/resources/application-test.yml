@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/orderplatform
-    username: platform
-    password: dev123
+    url: ${USER_DB_URL:jdbc:postgresql://localhost:5433/userdb}
+    username: ${USER_DB_USERNAME:userplatform}
+    password: ${USER_DB_PASSWORD:dev123}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
