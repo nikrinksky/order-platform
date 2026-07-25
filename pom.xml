@@ -50,7 +50,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.4.6</spring-boot.version>
+        <spring-boot.version>3.3.6</spring-boot.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
         <bouncycastle.version>1.81.1</bouncycastle.version>
     </properties>
@@ -82,35 +82,6 @@
                 <version>${spring-cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-            <!-- Force Spring Security version to fix CVE-2026-22732 -->
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-bom</artifactId>
-                <version>6.5.9</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- Force Spring Security artifacts version -->
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-web</artifactId>
-                <version>6.5.9</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-config</artifactId>
-                <version>6.5.9</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-core</artifactId>
-                <version>6.5.9</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-crypto</artifactId>
-                <version>6.5.9</version>
             </dependency>
             <!-- Force BouncyCastle version to fix CVE-2025-14813 -->
             <dependency>
