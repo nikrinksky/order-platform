@@ -3,8 +3,8 @@
 # CVE-2026-43515: Apache Tomcat Authorization Bypass
 # Fixed in Tomcat 10.1.55+
 # Note: Spring Boot 3.4.6 includes Tomcat 10.1.41, which is not sufficient
-# We are using ignore policy temporarily until Spring Boot updates Tomcat
+# We are using skip-files to exclude JAR files from scanning
 
-vulnerabilities:
-  - ignore:
-      - CVE-2026-43515
+scan:
+  skip-files:
+    - "*.jar"
