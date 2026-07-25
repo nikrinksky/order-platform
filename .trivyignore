@@ -1,7 +1,11 @@
 # Trivy configuration for CI/CD pipeline
 # This configuration excludes CVE-2026-43515 from security scans
 # CVE-2026-43515: Apache Tomcat Authorization Bypass
-# Fixed in Tomcat 10.1.40 (included in Spring Boot 3.4.5)
+# Fixed in Tomcat 10.1.55+
+# Note: Spring Boot 3.4.6 includes Tomcat 10.1.41, which is not sufficient
+# We are using ignore policy temporarily until Spring Boot updates Tomcat
 
-ignore:
-  - CVE-2026-43515
+vulnerabilities:
+  - type: ignore
+    ignore:
+      - CVE-2026-43515
