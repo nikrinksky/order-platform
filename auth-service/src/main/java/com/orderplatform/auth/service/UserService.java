@@ -89,23 +89,28 @@ public class UserService {
      * @param user the saved user entity
      */
     private void sendUserCreatedEvent(User user) {
-        try {
-            UserCreatedEvent event = UserCreatedEvent.builder()
-                    .id(user.getId())
-                    .email(user.getEmail())
-                    .firstName(user.getFirstName())
-                    .lastName(user.getLastName())
-                    .roles(user.getRoles().stream()
-                            .map(Enum::name)
-                            .collect(Collectors.toSet()))
-                    .isActive(user.isActive())
-                    .createdAt(user.getCreatedAt())
-                    .build();
+        if (kafkaTemplate != null) {
+            try {
+                UserCreatedEvent event = UserCreatedEvent.builder()
+                        .id(user.getId())
+                        .username(user.getEmail())
+                        .email(user.getEmail())
+                        .firstName(user.getFirstName())
+                        .lastName(user.getLastName())
+                        .roles(user.getRoles().stream()
+                                .map(Enum::name)
+                                .collect(Collectors.toSet()))
+                        .isActive(user.isActive())
+                        .createdAt(user.getCreatedAt())
+                        .build();
 
-            kafkaTemplate.send("user.created", user.getId(), event);
-            log.info("UserCreatedEvent sent for user: {}", user.getEmail());
-        } catch (Exception e) {
-            log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
+                kafkaTemplate.send("user.created", user.getId(), event);
+                log.info("UserCreatedEvent sent for user: {}", user.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
+            }
+        } else {
+            log.warn("KafkaTemplate is not available - skipping event send");
         }
     }
 
@@ -115,23 +120,27 @@ public class UserService {
      * @param user the updated user entity
      */
     private void sendUserUpdatedEvent(User user) {
-        try {
-            UserUpdatedEvent event = UserUpdatedEvent.builder()
-                    .id(user.getId())
-                    .email(user.getEmail())
-                    .firstName(user.getFirstName())
-                    .lastName(user.getLastName())
-                    .roles(user.getRoles().stream()
-                            .map(Enum::name)
-                            .collect(Collectors.toSet()))
-                    .isActive(user.isActive())
-                    .updatedAt(user.getUpdatedAt())
-                    .build();
+        if (kafkaTemplate != null) {
+            try {
+                UserUpdatedEvent event = UserUpdatedEvent.builder()
+                        .id(user.getId())
+                        .email(user.getEmail())
+                        .firstName(user.getFirstName())
+                        .lastName(user.getLastName())
+                        .roles(user.getRoles().stream()
+                                .map(Enum::name)
+                                .collect(Collectors.toSet()))
+                        .isActive(user.isActive())
+                        .updatedAt(user.getUpdatedAt())
+                        .build();
 
-            kafkaTemplate.send("user.updated", user.getId(), event);
-            log.info("UserUpdatedEvent sent for user: {}", user.getEmail());
-        } catch (Exception e) {
-            log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
+                kafkaTemplate.send("user.updated", user.getId(), event);
+                log.info("UserUpdatedEvent sent for user: {}", user.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
+            }
+        } else {
+            log.warn("KafkaTemplate is not available - skipping event send");
         }
     }
 }

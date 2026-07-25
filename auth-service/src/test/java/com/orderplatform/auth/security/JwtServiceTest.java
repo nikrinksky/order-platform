@@ -65,4 +65,60 @@ class JwtServiceTest {
         boolean isValid = jwtService.isTokenValid(token, userDetails);
         assertThat(isValid).isTrue();
     }
+
+    @Test
+    void testIsTokenValid_WithAccessTokenType() {
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = jwtService.generateRefreshToken(userDetails);
+        
+        // Access token should be valid for "access" type
+        boolean isValid = jwtService.isTokenValid(accessToken, userDetails, "access");
+        assertThat(isValid).isTrue();
+        
+        // Refresh token should be invalid for "access" type
+        boolean isRefreshInvalid = jwtService.isTokenValid(refreshToken, userDetails, "access");
+        assertThat(isRefreshInvalid).isFalse();
+    }
+
+    @Test
+    void testIsTokenValid_WithRefreshTokenType() {
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = jwtService.generateRefreshToken(userDetails);
+        
+        // Refresh token should be valid for "refresh" type
+        boolean isValid = jwtService.isTokenValid(refreshToken, userDetails, "refresh");
+        assertThat(isValid).isTrue();
+        
+        // Access token should be invalid for "refresh" type
+        boolean isAccessInvalid = jwtService.isTokenValid(accessToken, userDetails, "refresh");
+        assertThat(isAccessInvalid).isFalse();
+    }
+
+    @Test
+    void testIsAccessTokenValid() {
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = jwtService.generateRefreshToken(userDetails);
+        
+        // Access token should be valid
+        boolean isValid = jwtService.isAccessTokenValid(accessToken, userDetails);
+        assertThat(isValid).isTrue();
+        
+        // Refresh token should be invalid
+        boolean isRefreshInvalid = jwtService.isAccessTokenValid(refreshToken, userDetails);
+        assertThat(isRefreshInvalid).isFalse();
+    }
+
+    @Test
+    void testIsRefreshTokenValid() {
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = jwtService.generateRefreshToken(userDetails);
+        
+        // Refresh token should be valid
+        boolean isValid = jwtService.isRefreshTokenValid(refreshToken);
+        assertThat(isValid).isTrue();
+        
+        // Access token should be invalid
+        boolean isAccessInvalid = jwtService.isRefreshTokenValid(accessToken);
+        assertThat(isAccessInvalid).isFalse();
+    }
 }

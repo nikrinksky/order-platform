@@ -16,6 +16,7 @@ import java.util.Set;
 @AllArgsConstructor
 public class UserCreatedEvent {
     private String id;
+    private String username;
     private String email;
     private String firstName;
     private String lastName;

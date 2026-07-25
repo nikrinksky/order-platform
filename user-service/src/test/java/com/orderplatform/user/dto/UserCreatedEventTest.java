@@ -17,6 +17,7 @@ class UserCreatedEventTest {
         // When
         UserCreatedEvent event = UserCreatedEvent.builder()
                 .id("test-id")
+                .username("test@example.com")
                 .email("test@example.com")
                 .firstName("Test")
                 .lastName("User")
@@ -28,6 +29,7 @@ class UserCreatedEventTest {
         // Then
         assertNotNull(event);
         assertEquals("test-id", event.getId());
+        assertEquals("test@example.com", event.getUsername());
         assertEquals("test@example.com", event.getEmail());
         assertEquals("Test", event.getFirstName());
         assertEquals("User", event.getLastName());
@@ -44,6 +46,7 @@ class UserCreatedEventTest {
 
         // When
         event.setId("test-id");
+        event.setUsername("test@example.com");
         event.setEmail("test@example.com");
         event.setFirstName("Test");
         event.setLastName("User");
@@ -53,6 +56,7 @@ class UserCreatedEventTest {
 
         // Then
         assertEquals("test-id", event.getId());
+        assertEquals("test@example.com", event.getUsername());
         assertEquals("test@example.com", event.getEmail());
         assertEquals("Test", event.getFirstName());
         assertEquals("User", event.getLastName());
@@ -79,6 +83,7 @@ class UserCreatedEventTest {
         UserCreatedEvent event = new UserCreatedEvent(
                 "test-id",
                 "test@example.com",
+                "test@example.com",
                 "Test",
                 "User",
                 Set.of("ROLE_USER"),
@@ -89,6 +94,7 @@ class UserCreatedEventTest {
         // Then
         assertNotNull(event);
         assertEquals("test-id", event.getId());
+        assertEquals("test@example.com", event.getUsername());
         assertEquals("test@example.com", event.getEmail());
         assertEquals("Test", event.getFirstName());
         assertEquals("User", event.getLastName());

@@ -1,9 +1,16 @@
 spring:
   datasource:
-    url: ${USER_DB_URL:jdbc:postgresql://localhost:5433/userdb}
-    username: ${USER_DB_USERNAME:userplatform}
-    password: ${USER_DB_PASSWORD:dev123}
+    url: jdbc:postgresql://localhost:5432/orderplatform
+    username: platform
+    password: dev123
     driver-class-name: org.postgresql.Driver
+
+    # Инициализация схемы перед созданием таблиц (Spring Boot 3.x)
+    sql:
+      init:
+        mode: always
+        continue-on-error: true
+
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -11,7 +18,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        default_schema: user_profile
+        default_schema: auth
+
+  data:
+    redis:
+      enabled: false
+
   kafka:
     enabled: true
     bootstrap-servers: localhost:9092
@@ -21,21 +33,21 @@ spring:
       properties:
         spring.json.add.type.headers: false
     consumer:
-      group-id: user-service-group
+      group-id: auth-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.orderplatform.user.dto"
-  sql:
-    init:
-      mode: always
-      continue-on-error: true
-server:
-  port: 8080
+        spring.json.trusted.packages: "*"
+
+jwt:
+  secret: testSecretKeyForIntegrationTests1234567890
+  expiration: 3600000
+  refresh-expiration: 604800000
 
 logging:
   level:
-    com.orderplatform.user: INFO
+    com.orderplatform.auth: INFO
+    org.springframework.security: WARN
     org.springframework.test: INFO
     org.springframework.jdbc: INFO
     org.postgresql: WARN

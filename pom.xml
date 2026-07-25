@@ -50,9 +50,21 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.2.12</spring-boot.version>
+        <spring-boot.version>3.4.6</spring-boot.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <bouncycastle.version>1.81.1</bouncycastle.version>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Central Repository</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
 
     <dependencyManagement>
@@ -78,6 +90,33 @@
                 <version>6.5.9</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Force Spring Security artifacts version -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-web</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-config</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-core</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-crypto</artifactId>
+                <version>6.5.9</version>
+            </dependency>
+            <!-- Force BouncyCastle version to fix CVE-2025-14813 -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
             <!-- Test dependencies -->
             <dependency>
@@ -160,5 +199,9 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!-- No global plugins needed -->
+        </plugins>
     </build>
 </project>

@@ -71,6 +71,7 @@ class UserIntegrationTest extends AbstractIntegrationTest {
         // Создаем тестового пользователя напрямую в БД
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
+                .username("testuser_" + UUID.randomUUID().toString().substring(0, 8))
                 .email(generateUniqueEmail("test"))
                 .firstName("Test")
                 .lastName("User")
@@ -94,6 +95,7 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     void testGetUserById_Exists() {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
+                .username("getbyid_" + UUID.randomUUID().toString().substring(0, 8))
                 .email(generateUniqueEmail("getbyid"))
                 .firstName("Get")
                 .lastName("ById")
@@ -127,6 +129,7 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     void testGetUserByEmail_Exists() {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
+                .username("getbyemail_" + UUID.randomUUID().toString().substring(0, 8))
                 .email(generateUniqueEmail("getbyemail"))
                 .firstName("Get")
                 .lastName("ByEmail")

@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -99,9 +100,10 @@ class AuthenticationServiceTest {
 
         when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
         when(tokenBlacklistService.isTokenBlacklisted(oldRefreshToken)).thenReturn(false);
+        when(jwtService.isRefreshToken(oldRefreshToken)).thenReturn(true);
+        when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(jwtService.isTokenValid(oldRefreshToken, userDetails)).thenReturn(true);
         when(jwtService.generateToken(userDetails)).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
 
@@ -111,5 +113,38 @@ class AuthenticationServiceTest {
         assertThat(response).containsKey("refreshToken");
         assertThat(response.get("accessToken")).isEqualTo("new-access-token");
         assertThat(response.get("refreshToken")).isEqualTo("new-refresh-token");
+    }
+
+    @Test
+    void testRefreshToken_Fail_WhenAccessTokenUsed() {
+        String accessToken = "access-token";
+
+        when(jwtService.isRefreshToken(accessToken)).thenReturn(false);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+            authenticationService.refreshToken(accessToken);
+        });
+
+        assertThat(thrown.getMessage()).isEqualTo("Invalid token type: expected refresh token");
+    }
+
+    @Test
+    void testRefreshToken_Fail_WhenAccessTokenUsedWithIsAccessTokenValid() {
+        String accessToken = "access-token";
+
+        when(jwtService.isAccessTokenValid(accessToken, userDetails)).thenReturn(false);
+
+        boolean isValid = jwtService.isAccessTokenValid(accessToken, userDetails);
+        assertThat(isValid).isFalse();
+    }
+
+    @Test
+    void testRefreshToken_Fail_WhenRefreshTokenUsedWithIsAccessTokenValid() {
+        String refreshToken = "refresh-token";
+
+        when(jwtService.isAccessTokenValid(refreshToken, userDetails)).thenReturn(false);
+
+        boolean isValid = jwtService.isAccessTokenValid(refreshToken, userDetails);
+        assertThat(isValid).isFalse();
     }
 }

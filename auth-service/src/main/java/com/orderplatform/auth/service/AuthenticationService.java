@@ -98,6 +98,12 @@ public class AuthenticationService {
      */
     public Map<String, Object> refreshToken(String refreshToken) {
         try {
+            // Check token type FIRST to prevent access token exchange
+            if (!jwtService.isRefreshToken(refreshToken)) {
+                log.warn("Invalid token type: expected refresh token, got access token");
+                throw new RuntimeException("Invalid token type: expected refresh token");
+            }
+
             if (tokenBlacklistService.isTokenBlacklisted(refreshToken)) {
                 String preview = refreshToken.substring(0, Math.min(AuthConstants.TOKEN_PREVIEW_LENGTH,
                         refreshToken.length()));
@@ -119,7 +125,7 @@ public class AuthenticationService {
                 throw new RuntimeException("User account is disabled");
             }
 
-            if (!jwtService.isTokenValid(refreshToken, userDetails)) {
+            if (!jwtService.isRefreshTokenValid(refreshToken)) {
                 throw new RuntimeException("Refresh token expired or invalid");
             }
 
@@ -142,6 +148,10 @@ public class AuthenticationService {
             response.put("user", userMapper.toDto(user));
 
             return response;
+        } catch (RuntimeException e) {
+            // Re-throw RuntimeException with original message
+            log.error("Refresh token error: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("Refresh token error: {}", e.getMessage());
             throw new RuntimeException("Invalid refresh token");

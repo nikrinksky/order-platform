@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -82,22 +83,43 @@ public class AuthController {
 
     /**
      * Refreshes the access token using refresh token.
+     * Accepts token either as query parameter or from Authorization header.
      *
-     * @param refreshToken the refresh token from Authorization header
+     * @param refreshToken the refresh token (from query param or header)
      * @return a map containing new access token, refresh token, and user info
      */
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refreshToken(String refreshToken) {
+    public ResponseEntity<Map<String, Object>> refreshToken(@RequestParam(value = "refreshToken", required = false) String refreshToken,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
-            if (refreshToken != null && refreshToken.startsWith("Bearer ")) {
-                String token = refreshToken.substring(AuthConstants.BEARER_PREFIX_LENGTH);
-                Map<String, Object> response = authenticationService.refreshToken(token);
-                return ResponseEntity.ok(response);
+            String token = null;
+            
+            // Try to get token from query parameter first
+            if (refreshToken != null) {
+                // Remove Bearer prefix if present
+                if (refreshToken.startsWith("Bearer ")) {
+                    token = refreshToken.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+                } else {
+                    token = refreshToken;
+                }
+            } else if (authHeader != null) {
+                // Try to get token from Authorization header (with or without Bearer prefix)
+                if (authHeader.startsWith("Bearer ")) {
+                    token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+                } else {
+                    token = authHeader;
+                }
             }
-            throw new RuntimeException("Invalid refresh token");
+            
+            if (token == null) {
+                throw new RuntimeException("No refresh token provided");
+            }
+            
+            Map<String, Object> response = authenticationService.refreshToken(token);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
-            error.put("error", "Invalid refresh token");
+            error.put("error", "Invalid refresh token: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
         }
     }
@@ -132,9 +154,10 @@ public class AuthController {
 
     /**
      * Logs out the current user by revoking tokens.
+     * Accepts tokens from headers only (Authorization and X-Refresh-Token).
      *
-     * @param authHeader the Authorization header with access token
-     * @param refreshTokenFromHeader the optional refresh token from X-Refresh-Token header
+     * @param authHeader the Authorization header with access token (with or without Bearer prefix)
+     * @param refreshTokenHeader the refresh token from X-Refresh-Token header (with or without Bearer prefix)
      * @return a map containing logout status
      */
     @Operation(summary = "Logout", description = "Invalidates both access and refresh tokens")
@@ -143,28 +166,46 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Invalid token")
     })
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(String authHeader,
-            String refreshTokenFromHeader) {
+    public ResponseEntity<Map<String, String>> logout(@RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenHeader) {
 
         try {
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String accessToken = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
-
-                String refreshToken = refreshTokenFromHeader;
-
-                authenticationService.logout(accessToken, refreshToken);
-
-                Map<String, String> response = new HashMap<>();
-                response.put("message", "Logout successful");
-                response.put("accessTokenRevoked", "true");
-                response.put("refreshTokenRevoked", refreshToken != null ? "true" : "false");
-
-                return ResponseEntity.ok(response);
+            // Try to get access token from Authorization header (with or without Bearer prefix)
+            String accessToken = null;
+            
+            if (authHeader != null) {
+                if (authHeader.startsWith("Bearer ")) {
+                    accessToken = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+                } else {
+                    accessToken = authHeader;
+                }
             }
+            
+            if (accessToken == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "No access token provided. Use 'Authorization' header.");
+                return ResponseEntity.badRequest().body(error);
+            }
+            
+            // Try to get refresh token from X-Refresh-Token header (with or without Bearer prefix)
+            String refreshToken = null;
+            
+            if (refreshTokenHeader != null) {
+                if (refreshTokenHeader.startsWith("Bearer ")) {
+                    refreshToken = refreshTokenHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+                } else {
+                    refreshToken = refreshTokenHeader;
+                }
+            }
+            
+            authenticationService.logout(accessToken, refreshToken);
 
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "No access token provided");
-            return ResponseEntity.badRequest().body(error);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Logout successful");
+            response.put("accessTokenRevoked", "true");
+            response.put("refreshTokenRevoked", refreshToken != null ? "true" : "false");
+
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();

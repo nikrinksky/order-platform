@@ -26,6 +26,11 @@ import java.util.function.Function;
 public class JwtService {
 
     /**
+     * Claim name for token type ("access" or "refresh").
+     */
+    public static final String TOKEN_TYPE_CLAIM = "token_use";
+
+    /**
      * Secret key for JWT signing.
      */
     @Value("${jwt.secret}")
@@ -67,6 +72,16 @@ public class JwtService {
     }
 
     /**
+     * Extracts token type from JWT token.
+     *
+     * @param token JWT token
+     * @return token type ("access" or "refresh")
+     */
+    public String extractTokenType(String token) {
+        return extractClaim(token, claims -> claims.get(TOKEN_TYPE_CLAIM, String.class));
+    }
+
+    /**
      * Generates a JWT token for user details.
      *
      * @param userDetails user details
@@ -84,6 +99,7 @@ public class JwtService {
      * @return generated JWT token
      */
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+        extraClaims.put(TOKEN_TYPE_CLAIM, "access");
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
@@ -100,7 +116,10 @@ public class JwtService {
      * @return generated refresh token
      */
     public String generateRefreshToken(UserDetails userDetails) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put(TOKEN_TYPE_CLAIM, "refresh");
         return Jwts.builder()
+                .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
@@ -110,14 +129,84 @@ public class JwtService {
 
     /**
      * Checks if a JWT token is valid for user details.
+     * This method validates:
+     * - Token type (access or refresh)
+     * - Username (email) matches
+     * - Token is not expired
      *
      * @param token JWT token
      * @param userDetails user details
      * @return true if token is valid
      */
     public boolean isTokenValid(String token, UserDetails userDetails) {
+        return isTokenValid(token, userDetails, null);
+    }
+
+    /**
+     * Checks if a JWT token is valid for user details with optional token type check.
+     * This method validates:
+     * - Token type matches (if specified)
+     * - Username (email) matches
+     * - Token is not expired
+     *
+     * @param token JWT token
+     * @param userDetails user details
+     * @param expectedTokenType expected token type ("access" or "refresh"), null to skip type check
+     * @return true if token is valid
+     */
+    public boolean isTokenValid(String token, UserDetails userDetails, String expectedTokenType) {
+        // Check token type if expected type is provided
+        if (expectedTokenType != null && !expectedTokenType.isEmpty()) {
+            if (!expectedTokenType.equals(extractTokenType(token))) {
+                return false;
+            }
+        }
+        
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+
+    /**
+     * Checks if a JWT token is an access token.
+     *
+     * @param token JWT token
+     * @return true if token type is "access"
+     */
+    public boolean isAccessToken(String token) {
+        try {
+            return "access".equals(extractTokenType(token));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Validates an access token for user details.
+     * This method validates:
+     * - Token type is "access"
+     * - Username (email) matches
+     * - Token is not expired
+     *
+     * @param token access token
+     * @param userDetails user details
+     * @return true if access token is valid
+     */
+    public boolean isAccessTokenValid(String token, UserDetails userDetails) {
+        return isTokenValid(token, userDetails, "access");
+    }
+
+    /**
+     * Checks if a JWT token is a refresh token.
+     *
+     * @param token JWT token
+     * @return true if token type is "refresh"
+     */
+    public boolean isRefreshToken(String token) {
+        try {
+            return "refresh".equals(extractTokenType(token));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -185,12 +274,18 @@ public class JwtService {
 
     /**
      * Checks if a refresh token is valid.
+     * This method validates:
+     * - Token type is "refresh"
+     * - Token is not expired
      *
      * @param token refresh token
      * @return true if refresh token is valid
      */
     public boolean isRefreshTokenValid(String token) {
         try {
+            if (!isRefreshToken(token)) {
+                return false;
+            }
             return !isTokenExpired(token);
         } catch (Exception e) {
             return false;

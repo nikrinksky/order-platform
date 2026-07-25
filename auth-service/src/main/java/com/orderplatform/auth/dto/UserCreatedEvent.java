@@ -27,6 +27,11 @@ public class UserCreatedEvent {
     private String id;
 
     /**
+     * User's username (email).
+     */
+    private String username;
+
+    /**
      * User's email address.
      */
     private String email;
