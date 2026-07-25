@@ -17,6 +17,8 @@ spring:
             - Path=/health, /info, /actuator/**
           filters:
             - StripPrefix=0
+    compatibility-verifier:
+      enabled: false
 
 server:
   port: 8080
