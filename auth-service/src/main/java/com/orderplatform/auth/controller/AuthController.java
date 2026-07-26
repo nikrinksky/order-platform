@@ -16,19 +16,15 @@ import com.orderplatform.auth.service.UserMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +33,7 @@ import java.util.Map;
  * Controller for Auth Service authentication endpoints.
  * Provides endpoints for user registration, login, token refresh, and user info retrieval.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -88,6 +85,11 @@ public class AuthController {
      * @param refreshToken the refresh token (from query param or header)
      * @return a map containing new access token, refresh token, and user info
      */
+    @Operation(summary = "Refresh Token", description = "Invalidates old refresh token and generates new tokens")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tokens refreshed successfully"),
+            @ApiResponse(responseCode = "401", description = "Invalid refresh token")
+    })
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refreshToken(@RequestParam(value = "refreshToken", required = false) String refreshToken,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
