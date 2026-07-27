@@ -70,10 +70,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.4.0</version>
                 <configuration>
-                    <skip>true</skip>
-                    <configLocation>sun_checks.xml</configLocation>
+                    <configLocation>config/checkstyle/sun_checks.xml</configLocation>
                     <failOnViolation>true</failOnViolation>
                 </configuration>
             </plugin>
@@ -81,6 +80,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
                 <configuration>
                     <excludes>
                         <exclude>**/ProblemTest.java</exclude>
