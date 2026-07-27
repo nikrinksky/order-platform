@@ -26,7 +26,7 @@
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
     <data-source source="LOCAL" name="@localhost" uuid="976db4bf-7d53-44f9-a7ef-5ff398ef79b1">
-      <driver-ref>mongo</driver-ref>
+      <driver-ref>mongo.4</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.dbschema.MongoJdbcDriver</jdbc-driver>
       <jdbc-url>mongodb://localhost:27017</jdbc-url>
@@ -37,7 +37,7 @@
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="userdb@localhost" uuid="35e586fd-9e94-4d0c-8108-0677ea69ec94">
+    <data-source source="LOCAL" name="userdb@localhost" uuid="d345517a-34a9-4fe7-b4ab-9204e52ebbfd">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>

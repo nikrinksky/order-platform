@@ -54,6 +54,9 @@ public class TokenBlacklistService {
         try {
             String key = "blacklist:" + token;
             Boolean isBlacklisted = redisTemplate.hasKey(key);
+            if (Boolean.TRUE.equals(isBlacklisted)) {
+                log.info("Token is blacklisted: {}...", token.substring(0, Math.min(50, token.length())));
+            }
             return Boolean.TRUE.equals(isBlacklisted);
         } catch (Exception e) {
             log.error("Failed to check blacklist: {}", e.getMessage());
