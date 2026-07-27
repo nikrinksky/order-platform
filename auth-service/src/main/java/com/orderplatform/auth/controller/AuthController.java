@@ -1,4 +1,4 @@
-﻿package com.orderplatform.auth.controller;
+package com.orderplatform.auth.controller;
 
 import com.orderplatform.auth.AuthConstants;
 import com.orderplatform.auth.dto.LoginRequest;

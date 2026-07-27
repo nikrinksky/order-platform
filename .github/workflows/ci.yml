@@ -93,7 +93,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Run Checkstyle
-        run: mvn checkstyle:check -Dcheckstyle.config.location=sun_checks.xml
+        run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
 
       - name: Run Unit Tests with Coverage and Check
         run: mvn verify -DskipITs=true
