@@ -3,28 +3,20 @@ package com.orderplatform.auth.integration;
 import com.orderplatform.auth.AbstractIntegrationTest;
 import com.orderplatform.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthIntegrationTest extends AbstractIntegrationTest {
 
-    @Value("${local.server.port}")
+    @LocalServerPort
     private int port;
 
     @Autowired
@@ -33,20 +25,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
     @BeforeEach
     void cleanUp() {
         userRepository.deleteAll();
-        try {
-            Set<String> keys = redisTemplate.keys("blacklist:*");
-            if (keys != null && !keys.isEmpty()) {
-                redisTemplate.delete(keys);
-            }
-        } catch (Exception e) {
-            // Игнорируем ошибки Redis
-        }
     }
 
     private String getBaseUrl() {
@@ -64,7 +45,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(1)
     void testRegister() {
         String uniqueEmail = generateUniqueEmail("test");
         Map<String, String> request = Map.of(
@@ -86,7 +66,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(2)
     void testLogin() {
         String uniqueEmail = generateUniqueEmail("login");
 
@@ -109,7 +88,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(3)
     void testRefreshToken() {
         String uniqueEmail = generateUniqueEmail("refresh");
 
@@ -160,7 +138,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(4)
     void testLogout() {
         String uniqueEmail = generateUniqueEmail("logout");
 
@@ -214,7 +191,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(5)
     void testRegisterDuplicateEmail() {
         String uniqueEmail = generateUniqueEmail("duplicate");
 
