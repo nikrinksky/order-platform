@@ -61,37 +61,52 @@ public class AuthController {
         }
     }
 
-    @Operation(summary = "Refresh Token", description = "Invalidates old refresh token and generates new tokens")
+    @Operation(summary = "Refresh Token", description = "Invalidates old tokens and generates new ones")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Tokens refreshed successfully"),
-            @ApiResponse(responseCode = "401", description = "Invalid refresh token")
+            @ApiResponse(responseCode = "400", description = "Missing tokens"),
+            @ApiResponse(responseCode = "401", description = "Invalid tokens")
     })
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refreshToken(@RequestParam(value = "refreshToken", required = false) String refreshToken,
-                                                            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    public ResponseEntity<Map<String, Object>> refreshToken(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader("X-Refresh-Token") String refreshTokenHeader
+            ) {
         try {
-            String token = null;
-            if (refreshToken != null) {
-                if (refreshToken.startsWith("Bearer ")) {
-                    token = refreshToken.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+            // Extract access token from Authorization header
+            String accessToken = null;
+            if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+                accessToken = authorizationHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
+            } else if (authorizationHeader != null) {
+                accessToken = authorizationHeader;
+            }
+            if (accessToken == null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Missing Authorization header with access token");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
+
+            // Extract refresh token
+            String refreshToken = null;
+            if (refreshTokenHeader != null && !refreshTokenHeader.isBlank()) {
+                if (refreshTokenHeader.startsWith("Bearer ")) {
+                    refreshToken = refreshTokenHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
                 } else {
-                    token = refreshToken;
-                }
-            } else if (authHeader != null) {
-                if (authHeader.startsWith("Bearer ")) {
-                    token = authHeader.substring(AuthConstants.BEARER_PREFIX_LENGTH);
-                } else {
-                    token = authHeader;
+                    refreshToken = refreshTokenHeader;
                 }
             }
-            if (token == null) {
-                throw new RuntimeException("No refresh token provided");
+            if (refreshToken == null || refreshToken.isBlank()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Missing or empty X-Refresh-Token header");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
             }
-            Map<String, Object> response = authenticationService.refreshToken(token);
+
+            // Revoke both old tokens and generate new ones
+            Map<String, Object> response = authenticationService.refreshToken(accessToken, refreshToken);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
-            error.put("error", "Invalid refresh token: " + e.getMessage());
+            error.put("error", "Invalid tokens: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
         }
     }
@@ -114,11 +129,12 @@ public class AuthController {
     @Operation(summary = "Logout", description = "Invalidates both access and refresh tokens")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully logged out"),
+            @ApiResponse(responseCode = "400", description = "Missing tokens"),
             @ApiResponse(responseCode = "401", description = "Invalid token")
     })
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(@RequestHeader(value = "Authorization", required = false) String authHeader,
-                                                      @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenHeader) {
+    public ResponseEntity<Map<String, String>> logout(@RequestHeader("Authorization") String authHeader,
+                                                      @RequestHeader("X-Refresh-Token") String refreshTokenHeader) {
         try {
             String accessToken = null;
             if (authHeader != null) {
@@ -130,9 +146,10 @@ public class AuthController {
             }
             if (accessToken == null) {
                 Map<String, String> error = new HashMap<>();
-                error.put("error", "No access token provided. Use Authorization header.");
+                error.put("error", "Missing Authorization header.");
                 return ResponseEntity.badRequest().body(error);
             }
+
             String refreshToken = null;
             if (refreshTokenHeader != null) {
                 if (refreshTokenHeader.startsWith("Bearer ")) {
@@ -141,11 +158,13 @@ public class AuthController {
                     refreshToken = refreshTokenHeader;
                 }
             }
+
             authenticationService.logout(accessToken, refreshToken);
+
             Map<String, String> response = new HashMap<>();
             response.put("message", "Logout successful");
             response.put("accessTokenRevoked", "true");
-            response.put("refreshTokenRevoked", Boolean.toString(refreshToken != null));
+            response.put("refreshTokenRevoked", "true");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();

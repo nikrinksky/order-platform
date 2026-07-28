@@ -27,17 +27,17 @@ public class TokenBlacklistService {
      * Adds a token to the blacklist.
      *
      * @param token JWT token to blacklist
-     * @param expirationMillis token expiration time in milliseconds (absolute epoch time)
+     * @param ttlSeconds token time-to-live in seconds
      */
-    public void blacklistToken(String token, long expirationMillis) {
+    public void blacklistToken(String token, long ttlSeconds) {
         try {
-            long now = System.currentTimeMillis();
-            long ttlMillis = Math.max(0, expirationMillis - now);
-            
+            if (ttlSeconds <= 0) {
+                log.debug("Token TTL is 0 or negative, skipping blacklist: {}", token);
+                return;
+            }
             String key = "blacklist:" + token;
-            redisTemplate.opsForValue().set(key, "true", ttlMillis, TimeUnit.MILLISECONDS);
-            long seconds = ttlMillis / AuthConstants.MILLISECONDS_PER_SECOND;
-            log.info("Token blacklisted with TTL: {} seconds (exp: {}, now: {})", seconds, expirationMillis, now);
+            redisTemplate.opsForValue().set(key, "true", ttlSeconds, TimeUnit.SECONDS);
+            log.info("Token blacklisted with TTL: {} seconds", ttlSeconds);
         } catch (Exception e) {
             log.error("Failed to blacklist token: {}", e.getMessage());
             e.printStackTrace();

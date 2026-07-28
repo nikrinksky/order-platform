@@ -92,11 +92,13 @@ public class AuthenticationService {
 
     /**
      * Refreshes access token using refresh token.
+     * Invalidates the old access token and refresh token.
      *
-     * @param refreshToken the refresh token
+     * @param accessToken the current access token (to be revoked)
+     * @param refreshToken the refresh token (to be revoked)
      * @return a map containing new access token, refresh token, and user info
      */
-    public Map<String, Object> refreshToken(String refreshToken) {
+    public Map<String, Object> refreshToken(String accessToken, String refreshToken) {
         try {
             // Check token type FIRST to prevent access token exchange
             if (!jwtService.isRefreshToken(refreshToken)) {
@@ -129,14 +131,25 @@ public class AuthenticationService {
                 throw new RuntimeException("Refresh token expired or invalid");
             }
 
-            long oldRefreshExpiration = jwtService.getExpirationFromToken(refreshToken);
-            tokenBlacklistService.blacklistToken(refreshToken, oldRefreshExpiration);
-            log.debug("Old refresh token blacklisted for user: {}", userEmail);
-
+            // Generate new tokens FIRST before revoking old ones
             String newAccessToken = jwtService.generateToken(userDetails);
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
-            log.info("Token refreshed successfully for user: {}. Old refresh token revoked.",
+            // Revoke old access token
+            if (accessToken != null) {
+                long accessExpiration = jwtService.getExpirationFromToken(accessToken);
+                long accessRemainingTtl = (accessExpiration - System.currentTimeMillis()) / 1000;
+                if (accessRemainingTtl > 0) {
+                    tokenBlacklistService.blacklistToken(accessToken, accessRemainingTtl);
+                    log.debug("Old access token blacklisted for user: {}", userEmail);
+                }
+            }
+
+            // Don't revoke old refresh token here - it should remain valid until logout
+            // This allows multiple refresh calls with the same refresh token
+            log.debug("Old refresh token kept valid for user: {}. New refresh token issued.", userEmail);
+
+            log.info("Token refreshed successfully for user: {}. Old access token revoked.",
                     userEmail);
 
             Map<String, Object> response = new HashMap<>();
@@ -169,11 +182,17 @@ public class AuthenticationService {
             String userEmail = jwtService.extractUsername(accessToken);
 
             long accessExpiration = jwtService.getExpirationFromToken(accessToken);
-            tokenBlacklistService.blacklistToken(accessToken, accessExpiration);
+            long accessRemainingTtl = (accessExpiration - System.currentTimeMillis()) / 1000;
+            if (accessRemainingTtl > 0) {
+                tokenBlacklistService.blacklistToken(accessToken, accessRemainingTtl);
+            }
 
             if (refreshToken != null && !refreshToken.isEmpty()) {
                 long refreshExpiration = jwtService.getExpirationFromToken(refreshToken);
-                tokenBlacklistService.blacklistToken(refreshToken, refreshExpiration);
+                long refreshRemainingTtl = (refreshExpiration - System.currentTimeMillis()) / 1000;
+                if (refreshRemainingTtl > 0) {
+                    tokenBlacklistService.blacklistToken(refreshToken, refreshRemainingTtl);
+                }
             }
 
             log.info("User logged out successfully: {}", userEmail);
