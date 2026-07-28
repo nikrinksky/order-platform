@@ -70,7 +70,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             final String userEmail = jwtService.extractUsername(jwt);
 
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
+                // Skip blacklist check for refresh endpoint
+                if (!request.getServletPath().equals("/api/auth/refresh") && tokenBlacklistService.isTokenBlacklisted(jwt)) {
                     log.warn("Token is blacklisted for user: {}", userEmail);
                     response.sendError(HttpStatus.UNAUTHORIZED.value(), "Token has been revoked");
                     return;

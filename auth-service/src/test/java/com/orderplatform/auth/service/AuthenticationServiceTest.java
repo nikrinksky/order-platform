@@ -96,6 +96,7 @@ class AuthenticationServiceTest {
 
     @Test
     void testRefreshToken_Success() {
+        String oldAccessToken = "old-access-token";
         String oldRefreshToken = "old-refresh-token";
 
         when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
@@ -106,8 +107,10 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.generateToken(userDetails)).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        when(jwtService.getExpirationFromToken(oldRefreshToken)).thenReturn(System.currentTimeMillis() + 3600000);
+        when(jwtService.getExpirationFromToken(oldAccessToken)).thenReturn(System.currentTimeMillis() + 300000);
 
-        Map<String, Object> response = authenticationService.refreshToken(oldRefreshToken);
+        Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
 
         assertThat(response).containsKey("accessToken");
         assertThat(response).containsKey("refreshToken");
@@ -116,35 +119,31 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void testRefreshToken_Fail_WhenAccessTokenUsed() {
-        String accessToken = "access-token";
+    void testRefreshToken_Fail_WhenRefreshTokenTypeInvalid() {
+        String oldAccessToken = "old-access-token";
+        String invalidToken = "access-token";
 
-        when(jwtService.isRefreshToken(accessToken)).thenReturn(false);
+        when(jwtService.isRefreshToken(invalidToken)).thenReturn(false);
 
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
-            authenticationService.refreshToken(accessToken);
+            authenticationService.refreshToken(oldAccessToken, invalidToken);
         });
 
         assertThat(thrown.getMessage()).isEqualTo("Invalid token type: expected refresh token");
     }
 
     @Test
-    void testRefreshToken_Fail_WhenAccessTokenUsedWithIsAccessTokenValid() {
-        String accessToken = "access-token";
+    void testRefreshToken_Fail_WhenRefreshTokenBlacklisted() {
+        String oldAccessToken = "old-access-token";
+        String blacklistedRefreshToken = "blacklisted-refresh-token";
 
-        when(jwtService.isAccessTokenValid(accessToken, userDetails)).thenReturn(false);
+        when(jwtService.isRefreshToken(blacklistedRefreshToken)).thenReturn(true);
+        when(tokenBlacklistService.isTokenBlacklisted(blacklistedRefreshToken)).thenReturn(true);
 
-        boolean isValid = jwtService.isAccessTokenValid(accessToken, userDetails);
-        assertThat(isValid).isFalse();
-    }
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+            authenticationService.refreshToken(oldAccessToken, blacklistedRefreshToken);
+        });
 
-    @Test
-    void testRefreshToken_Fail_WhenRefreshTokenUsedWithIsAccessTokenValid() {
-        String refreshToken = "refresh-token";
-
-        when(jwtService.isAccessTokenValid(refreshToken, userDetails)).thenReturn(false);
-
-        boolean isValid = jwtService.isAccessTokenValid(refreshToken, userDetails);
-        assertThat(isValid).isFalse();
+        assertThat(thrown.getMessage()).isEqualTo("Refresh token has been revoked");
     }
 }
