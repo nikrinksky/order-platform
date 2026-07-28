@@ -107,8 +107,6 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.generateToken(userDetails)).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
-        when(jwtService.getExpirationFromToken(oldRefreshToken)).thenReturn(System.currentTimeMillis() + 3600000);
-        when(jwtService.getExpirationFromToken(oldAccessToken)).thenReturn(System.currentTimeMillis() + 300000);
 
         Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
 
