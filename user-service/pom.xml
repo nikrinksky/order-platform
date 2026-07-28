@@ -158,6 +158,10 @@
                         <include>**/*IntegrationTest.java</include>
                     </includes>
                     <skip>${skipITs}</skip>
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+                    </additionalClasspathElements>
+                    <useSystemClassLoader>false</useSystemClassLoader>
                 </configuration>
                 <executions>
                     <execution>
@@ -167,6 +171,15 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <testIncludes>
+                        <testInclude>**/*Test.java</testInclude>
+                    </testIncludes>
+                </configuration>
             </plugin>
 
             <plugin>

@@ -3,7 +3,9 @@ package com.orderplatform.user.integration;
 import com.orderplatform.user.AbstractIntegrationTest;
 import com.orderplatform.user.model.User;
 import com.orderplatform.user.repository.UserRepository;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -14,7 +16,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class UserIntegrationTest extends AbstractIntegrationTest {
 
     @LocalServerPort
@@ -53,7 +54,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(1)
     void testGetAllUsers_EmptyDatabase() {
         ResponseEntity<User[]> response = restTemplate.getForEntity(
                 getBaseUrl() + "/api/users",
@@ -66,7 +66,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(2)
     void testGetAllUsers_WithUsers() {
         // Создаем тестового пользователя напрямую в БД
         User user = User.builder()
@@ -91,7 +90,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(3)
     void testGetUserById_Exists() {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
@@ -114,7 +112,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(4)
     void testGetUserById_NotFound() {
         ResponseEntity<User> response = restTemplate.getForEntity(
                 getBaseUrl() + "/api/users/" + UUID.randomUUID().toString(),
@@ -125,7 +122,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(5)
     void testGetUserByEmail_Exists() {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
@@ -150,7 +146,6 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(6)
     void testGetUserByEmail_NotFound() {
         ResponseEntity<Map> response = restTemplate.getForEntity(
                 getBaseUrl() + "/api/users/email/nonexistent@example.com",

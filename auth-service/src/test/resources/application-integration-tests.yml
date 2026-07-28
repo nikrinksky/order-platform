@@ -7,22 +7,22 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
-      default_schema: user_profile
     show-sql: false
     properties:
       hibernate:
         format_sql: true
-        default_schema: user_profile
+  data:
+    redis:
+      enabled: false
   kafka:
     enabled: false
-  sql:
-    init:
-      mode: never
 
-server:
-  port: 0
+jwt:
+  secret: testSecretKeyForIntegrationTests1234567890
+  expiration: 3600000
+  refresh-expiration: 604800000
 
 logging:
   level:
-    com.orderplatform.user: INFO
-    org.springframework.test: INFO
+    com.orderplatform.auth: INFO
+    org.springframework.security: WARN
