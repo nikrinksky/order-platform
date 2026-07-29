@@ -66,6 +66,7 @@ services:
     volumes:
       - user_db_data:/var/lib/postgresql/data
       - ./user-db-postgres.conf:/etc/postgresql/postgresql.conf:ro
+      - ./user-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U userplatform -d userdb"]
@@ -189,10 +190,19 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       AUTH_SERVICE_URL: http://auth-service:8090
+      USER_SERVICE_URL: http://user-service:8082
+      PRODUCT_SERVICE_URL: http://product-service:8083
+      INVENTORY_SERVICE_URL: http://inventory-service:8084
+      ORDER_SERVICE_URL: http://order-service:8085
+      NOTIFICATION_SERVICE_URL: http://notification-service:8086
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: dev123
     networks:
       - order-network
     depends_on:
       - auth-service
+      - redis
 
     restart: unless-stopped
 

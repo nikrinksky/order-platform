@@ -3,16 +3,56 @@ spring:
     name: api-gateway
   cloud:
     gateway:
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 10
+            redis-rate-limiter.burstCapacity: 20
       routes:
         - id: auth-service
-          uri: ${AUTH_SERVICE_URL:http://host.docker.internal:8090}
+          uri: ${AUTH_SERVICE_URL:http://localhost:8090}
           predicates:
             - Path=/api/auth/**
           filters:
             - StripPrefix=0
 
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=0
+
+        - id: product-service
+          uri: ${PRODUCT_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/products/**
+          filters:
+            - StripPrefix=0
+
+        - id: inventory-service
+          uri: ${INVENTORY_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/inventory/**
+          filters:
+            - StripPrefix=0
+
+        - id: order-service
+          uri: ${ORDER_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=0
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+
         - id: auth-service-health
-          uri: ${AUTH_SERVICE_URL:http://host.docker.internal:8090}
+          uri: ${AUTH_SERVICE_URL:http://localhost:8090}
           predicates:
             - Path=/health, /info, /actuator/**
           filters:
@@ -33,3 +73,10 @@ logging:
   level:
     org.springframework.cloud.gateway: DEBUG
     org.springframework.web: DEBUG
+
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}

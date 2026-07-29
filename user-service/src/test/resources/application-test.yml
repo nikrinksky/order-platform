@@ -30,6 +30,22 @@ spring:
     init:
       mode: always
       continue-on-error: true
+
+  security:
+    enabled: false
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+
+---
+# Профиль для тестов — полностью отключаем security
+spring:
+  config:
+    activate:
+      on-profile: test-exclude-security
+
 server:
   port: 8080
 
@@ -39,3 +55,7 @@ logging:
     org.springframework.test: INFO
     org.springframework.jdbc: INFO
     org.postgresql: WARN
+
+jwt:
+  secret: test-secret-key-for-unit-tests-must-be-long-enough
+  expiration: 3600000

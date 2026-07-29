@@ -10,9 +10,9 @@ public class RateLimiterConfig {
 
     @Bean
     public KeyResolver userKeyResolver() {
-        return exchange -> Mono.just(exchange.getRequest()
-                .getRemoteAddress()
-                .getAddress()
-                .getHostAddress());
+        return exchange -> Mono.justOrEmpty(
+                exchange.getRequest().getHeaders().getFirst("Authorization"))
+                .map(auth -> auth.replace("Bearer ", ""))
+                .defaultIfEmpty("anonymous");
     }
 }

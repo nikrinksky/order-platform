@@ -26,3 +26,12 @@ logging:
   level:
     com.orderplatform.user: INFO
     org.springframework.test: INFO
+
+jwt:
+  secret: test-secret-key-for-integration-tests-must-be-long-enough
+  expiration: 3600000
+
+  security:
+    user:
+      name: testuser
+      password: testpass

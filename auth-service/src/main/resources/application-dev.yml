@@ -16,7 +16,14 @@ spring:
       password: dev123
 
   kafka:
-    enabled: false
+    enabled: true
+    bootstrap-servers: localhost:19092
+    producer:
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      properties:
+        spring.json.trusted.packages: "*"
 
 jwt:
   secret: devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction1234567890

@@ -14,20 +14,23 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         default_schema: user_profile
 
   kafka:
-    enabled: false  # Отключено по умолчанию, включается через profiles (docker/dev)
+    enabled: false  # По умолчанию выключен, включается в dev/docker профилях
+    bootstrap-servers: localhost:19092
     consumer:
       group-id: user-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "*"
+        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
+        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
+        spring.json.use.type.headers: false
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -38,6 +41,10 @@ server:
 logging:
   level:
     com.orderplatform.user: DEBUG
+
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
+  expiration: 3600000
 
 ---
 # Профиль для разработки (локальный запуск в IDEA)
@@ -65,8 +72,21 @@ spring:
         format_sql: true
         default_schema: user_profile
 
-  security:
-    debug: true
+  kafka:
+    enabled: true
+    bootstrap-servers: localhost:19092
+    consumer:
+      group-id: user-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
+        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
+        spring.json.use.type.headers: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 server:
   error:
@@ -128,6 +148,8 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
+        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
+        spring.json.use.type.headers: false
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
