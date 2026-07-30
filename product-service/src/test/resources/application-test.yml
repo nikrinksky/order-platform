@@ -1,0 +1,16 @@
+spring:
+  data:
+    mongodb:
+      enabled: false
+  kafka:
+    enabled: false
+  security:
+    user:
+      name: test
+      password: test
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
