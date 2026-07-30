@@ -29,6 +29,7 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+      - ./init-mongo-init.js:/docker-entrypoint-initdb.d/init-mongo-init.js
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -70,6 +71,46 @@ services:
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U userplatform -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - order-network
+
+  inventorydb:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: inventorydb
+      POSTGRES_USER: inventoryuser
+      POSTGRES_PASSWORD: dev123
+    ports:
+      - "5434:5432"
+    volumes:
+      - inventory_db_data:/var/lib/postgresql/data
+      - ./init-postgres-init.sql:/docker-entrypoint-initdb.d/init-postgres-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventoryuser -d inventorydb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - order-network
+
+  orderdb:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: orderuser
+      POSTGRES_PASSWORD: dev123
+    ports:
+      - "5435:5432"
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+      - ./init-postgres-init.sql:/docker-entrypoint-initdb.d/init-postgres-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderuser -d orderdb"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -191,10 +232,10 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       AUTH_SERVICE_URL: http://auth-service:8090
       USER_SERVICE_URL: http://user-service:8082
-      PRODUCT_SERVICE_URL: http://product-service:8083
-      INVENTORY_SERVICE_URL: http://inventory-service:8084
-      ORDER_SERVICE_URL: http://order-service:8085
-      NOTIFICATION_SERVICE_URL: http://notification-service:8086
+      PRODUCT_SERVICE_URL: http://product-service:8089
+      INVENTORY_SERVICE_URL: http://inventory-service:8083
+      ORDER_SERVICE_URL: http://order-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
@@ -222,6 +263,94 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       user-db:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: productdb
+      SPRING_DATA_MONGODB_USERNAME: productuser
+      SPRING_DATA_MONGODB_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  inventory-service:
+    build:
+      context: ./inventory-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://inventorydb:5432/inventorydb
+      SPRING_DATASOURCE_USERNAME: inventoryuser
+      SPRING_DATASOURCE_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      inventorydb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://orderdb:5432/orderdb
+      SPRING_DATASOURCE_USERNAME: orderuser
+      SPRING_DATASOURCE_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      orderdb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: notificationdb
+      SPRING_DATA_MONGODB_USERNAME: notificationuser
+      SPRING_DATA_MONGODB_PASSWORD: dev123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      mongodb:
         condition: service_healthy
       redpanda:
         condition: service_healthy
@@ -293,3 +422,5 @@ volumes:
   redis_data:
   redpanda_data:
   user_db_data:
+  inventory_db_data:
+  order_db_data:
