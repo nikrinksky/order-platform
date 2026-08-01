@@ -1,0 +1,371 @@
+{
+    "variable":  [
+                     {
+                         "key":  "base_url",
+                         "value":  "http://localhost:8080"
+                     },
+                     {
+                         "key":  "product_service_url",
+                         "value":  "http://localhost:8089"
+                     },
+                     {
+                         "key":  "inventory_service_url",
+                         "value":  "http://localhost:8083"
+                     },
+                     {
+                         "key":  "access_token",
+                         "type":  "string",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "product_id",
+                         "type":  "string",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "user_id",
+                         "type":  "string",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "order_id",
+                         "type":  "string",
+                         "value":  ""
+                     }
+                 ],
+    "info":  {
+                 "description":  "Полная коллекция API запросов для Order Platform микросервисов",
+                 "name":  "Order Platform API",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+                 "version":  "1.0.0"
+             },
+    "item":  [
+                 {
+                     "name":  "1. Auth Service",
+                     "item":  [
+                                  {
+                                      "name":  "Register User",
+                                      "request":  {
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "raw":  "{{base_url}}/api/auth/register",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "register"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"email\": \"test@example.com\",\n  \"password\": \"testpass123\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\"\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ]
+                                                  }
+                                  },
+                                  {
+                                      "request":  {
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "raw":  "{{base_url}}/api/auth/login",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"email\": \"test@example.com\",\n  \"password\": \"testpass123\"\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ]
+                                                  },
+                                      "name":  "Login",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "var jsonData = pm.response.json();\nif (jsonData.token) {\n    pm.environment.set(\u0027access_token\u0027, jsonData.token);\n}\nif (jsonData.user \u0026\u0026 jsonData.user.id) {\n    pm.environment.set(\u0027user_id\u0027, jsonData.user.id);\n}"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "2. Product Service",
+                     "item":  [
+                                  {
+                                      "request":  {
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{product_service_url}}"
+                                                                           ],
+                                                                  "raw":  "{{product_service_url}}/api/products",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "products"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"name\": \"iPhone 15 Pro\",\n  \"price\": 1199.99,\n  \"category\": \"Electronics\",\n  \"quantity\": 50\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ]
+                                                  },
+                                      "name":  "Create Product",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "var jsonData = pm.response.json();\nif (jsonData.id) {\n    pm.environment.set(\u0027product_id\u0027, jsonData.id);\n}"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Get All Products",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  {
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "page",
+                                                                                    "value":  "0"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "size",
+                                                                                    "value":  "10"
+                                                                                }
+                                                                            ],
+                                                                  "host":  [
+                                                                               "{{product_service_url}}"
+                                                                           ],
+                                                                  "raw":  "{{product_service_url}}/api/products?page=0\u0026size=10",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "products"
+                                                                           ]
+                                                              }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Get Product By ID",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{product_service_url}}"
+                                                                           ],
+                                                                  "raw":  "{{product_service_url}}/api/products/{{product_id}}",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "products",
+                                                                               "{{product_id}}"
+                                                                           ]
+                                                              }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "3. Inventory Service",
+                     "item":  [
+                                  {
+                                      "name":  "Create/Update Inventory",
+                                      "request":  {
+                                                      "url":  {
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "productId",
+                                                                                    "value":  "{{product_id}}"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "quantity",
+                                                                                    "value":  "100"
+                                                                                }
+                                                                            ],
+                                                                  "host":  [
+                                                                               "{{inventory_service_url}}"
+                                                                           ],
+                                                                  "raw":  "{{inventory_service_url}}/api/inventory?productId={{product_id}}\u0026quantity=100",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "inventory"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+
+                                                                 ]
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Reserve Inventory",
+                                      "request":  {
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{inventory_service_url}}"
+                                                                           ],
+                                                                  "raw":  "{{inventory_service_url}}/api/inventory/reserve",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "inventory",
+                                                                               "reserve"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"orderId\": \"ORD-TEST-001\",\n  \"productId\": \"{{product_id}}\",\n  \"quantity\": 5\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ]
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "4. Order Service",
+                     "item":  [
+                                  {
+                                      "request":  {
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "raw":  "{{base_url}}/api/orders",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "orders"
+                                                                           ]
+                                                              },
+                                                      "method":  "POST",
+                                                      "body":  {
+                                                                   "raw":  "{\n  \"userId\": \"{{user_id}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"productName\": \"MacBook Pro 16\",\n      \"quantity\": 2,\n      \"price\": 2499.99\n    }\n  ]\n}",
+                                                                   "mode":  "raw"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{access_token}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  },
+                                      "name":  "Create Order",
+                                      "event":  [
+                                                    {
+                                                        "script":  {
+                                                                       "exec":  [
+                                                                                    "var jsonData = pm.response.json();\nif (jsonData.id) {\n    pm.environment.set(\u0027order_id\u0027, jsonData.id);\n}"
+                                                                                ],
+                                                                       "type":  "text/javascript"
+                                                                   },
+                                                        "listen":  "test"
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Get Orders By User",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "raw":  "{{base_url}}/api/orders/user/{{user_id}}",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "orders",
+                                                                               "user",
+                                                                               "{{user_id}}"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{access_token}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Get Order By ID",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  {
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "raw":  "{{base_url}}/api/orders/{{order_id}}",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "orders",
+                                                                               "{{order_id}}"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "type":  "string",
+                                                                                      "value":  "{{access_token}}"
+                                                                                  }
+                                                                              ],
+                                                                   "type":  "bearer"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 }
+             ]
+}

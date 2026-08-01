@@ -43,6 +43,7 @@ public class OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
             OrderItem item = OrderItem.builder()
+                    .order(order)
                     .productId(itemReq.getProductId())
                     .productName(itemReq.getProductName())
                     .quantity(itemReq.getQuantity())
