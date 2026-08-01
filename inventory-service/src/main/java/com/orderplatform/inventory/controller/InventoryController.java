@@ -18,7 +18,7 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping("/product/{productId}")
-    public ResponseEntity<InventoryItem> getInventoryByProduct(@PathVariable String productId) {
+    public ResponseEntity<InventoryItem> getInventoryByProduct(@PathVariable("productId") String productId) {
         Optional<InventoryItem> item = inventoryService.findByProductId(productId);
         return item.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -29,10 +29,10 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.reserve(request));
     }
 
-    @PostMapping
+    @PostMapping(consumes = "*/*")
     public ResponseEntity<InventoryItem> createInventoryItem(
-            @RequestParam String productId,
-            @RequestParam Integer quantity) {
+            @RequestParam("productId") String productId,
+            @RequestParam("quantity") Integer quantity) {
         return ResponseEntity.ok(inventoryService.createOrUpdate(productId, quantity));
     }
 
@@ -46,7 +46,7 @@ public class InventoryController {
 
     @PatchMapping("/product/{productId}/quantity")
     public ResponseEntity<Void> updateQuantity(
-            @PathVariable String productId,
+            @PathVariable("productId") String productId,
             @RequestParam Integer quantity) {
         inventoryService.updateQuantity(productId, quantity);
         return ResponseEntity.ok().build();

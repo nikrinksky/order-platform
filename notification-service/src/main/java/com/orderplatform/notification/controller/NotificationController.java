@@ -16,17 +16,17 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<Notification>> getNotificationsByUser(@PathVariable String userId) {
+    public ResponseEntity<List<Notification>> getNotificationsByUser(@PathVariable("userId") String userId) {
         return ResponseEntity.ok(notificationService.getNotificationsByUserId(userId));
     }
 
     @GetMapping("/user/{userId}/unsent")
-    public ResponseEntity<List<Notification>> getUnsentNotifications(@PathVariable String userId) {
+    public ResponseEntity<List<Notification>> getUnsentNotifications(@PathVariable("userId") String userId) {
         return ResponseEntity.ok(notificationService.getUnsentNotificationsByUserId(userId));
     }
 
     @PatchMapping("/{id}/mark-sent")
-    public ResponseEntity<Void> markAsSent(@PathVariable String id) {
+    public ResponseEntity<Void> markAsSent(@PathVariable("id") String id) {
         notificationService.markAsSent(id);
         return ResponseEntity.ok().build();
     }

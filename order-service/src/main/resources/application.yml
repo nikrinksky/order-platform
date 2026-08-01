@@ -2,6 +2,8 @@ server:
   port: 8084
 
 spring:
+  security:
+    enabled: false
   datasource:
     url: jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5435}/orderdb
     username: ${SPRING_DATASOURCE_USERNAME:orderuser}
