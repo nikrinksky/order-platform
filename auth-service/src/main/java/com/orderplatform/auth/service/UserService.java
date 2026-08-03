@@ -110,7 +110,7 @@ public class UserService {
                 log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
             }
         } else {
-            log.warn("KafkaTemplate is not available - skipping event send");
+            log.warn("KafkaTemplate is not available - skipping UserCreatedEvent send");
         }
     }
 
@@ -140,7 +140,7 @@ public class UserService {
                 log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
             }
         } else {
-            log.warn("KafkaTemplate is not available - skipping event send");
+            log.warn("KafkaTemplate is not available - skipping UserUpdatedEvent send");
         }
     }
 }

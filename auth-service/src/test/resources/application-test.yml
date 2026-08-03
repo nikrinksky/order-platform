@@ -1,15 +1,9 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/orderplatform
-    username: platform
-    password: dev123
-    driver-class-name: org.postgresql.Driver
-
-    # Инициализация схемы перед созданием таблиц (Spring Boot 3.x)
-    sql:
-      init:
-        mode: always
-        continue-on-error: true
+    url: jdbc:h2:mem:authdb;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
 
   jpa:
     hibernate:
@@ -18,26 +12,14 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        default_schema: auth
+        dialect: org.hibernate.dialect.H2Dialect
 
   data:
     redis:
       enabled: false
 
   kafka:
-    enabled: true
-    bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: false
-    consumer:
-      group-id: auth-service-group
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
+    enabled: false
 
 jwt:
   secret: testSecretKeyForIntegrationTests1234567890
@@ -50,4 +32,3 @@ logging:
     org.springframework.security: WARN
     org.springframework.test: INFO
     org.springframework.jdbc: INFO
-    org.postgresql: WARN
