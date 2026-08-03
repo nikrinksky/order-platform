@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:userdb;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:userdb;DB_CLOSE_DELAY=-1;INIT=RUNSCRIPT FROM 'classpath:schema.sql'
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -11,12 +11,13 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_schema: user_profile
         dialect: org.hibernate.dialect.H2Dialect
-  kafka:
-    enabled: false
   sql:
     init:
-      mode: never
+      mode: always
+  kafka:
+    enabled: false
   security:
     enabled: false
   autoconfigure:
