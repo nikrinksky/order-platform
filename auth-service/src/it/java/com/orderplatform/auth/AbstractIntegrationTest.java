@@ -16,6 +16,14 @@ public abstract class AbstractIntegrationTest {
 
     @DynamicPropertySource
     static void configureTestProperties(DynamicPropertyRegistry registry) {
+        // Override CI environment variables to force H2 in-memory DB
+        registry.add("spring.datasource.url", () -> "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE");
+        registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
+        registry.add("spring.datasource.username", () -> "sa");
+        registry.add("spring.datasource.password", () -> "");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.kafka.properties.request.timeout.ms", () -> "1000");
+        registry.add("spring.kafka.properties.session.timeout.ms", () -> "1000");
         registry.add("jwt.secret", () -> "testSecretKeyForIntegrationTests1234567890");
     }
 }

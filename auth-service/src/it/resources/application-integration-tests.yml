@@ -16,6 +16,7 @@ spring:
       enabled: false
   kafka:
     enabled: false
+    bootstrap-servers: localhost:9999
 
 jwt:
   secret: testSecretKeyForIntegrationTests1234567890
