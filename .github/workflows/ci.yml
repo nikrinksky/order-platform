@@ -21,7 +21,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U platform -d orderplatform"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -35,7 +35,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U userplatform -d userdb"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -108,7 +108,7 @@ jobs:
           done
 
       - name: Run Integration Tests with Testcontainers
-        run: mvn verify -Pintegration-tests
+        run: mvn verify -Pintegration-tests -Djacoco.skip=true
 
       - name: Security Scan (Trivy)
         uses: aquasecurity/trivy-action@master
