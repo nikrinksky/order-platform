@@ -197,10 +197,10 @@
                 <version>3.2.5</version>
                 <configuration>
                     <excludes>
-                        <exclude>**/ProblemTest.java</exclude>
                         <exclude>**/integration/**</exclude>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                        <exclude>**/*IT.java</exclude>
                     </excludes>
-                    <skip>${skipUnitTests}</skip>
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>
@@ -211,12 +211,14 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                     <includes>
                         <include>**/*IT.java</include>
                         <include>**/*IntegrationTest.java</include>
                     </includes>
-                    <skipITs>true</skipITs>
-                    <useSystemClassLoader>false</useSystemClassLoader>
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+                    </additionalClasspathElements>
                 </configuration>
                 <executions>
                     <execution>
@@ -224,6 +226,39 @@
                             <goal>integration-test</goal>
                             <goal>verify</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>add-integration-test-sources</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/it/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>add-integration-test-resources</id>
+                        <phase>generate-test-resources</phase>
+                        <goals>
+                            <goal>add-test-resource</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>src/it/resources</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -259,7 +294,12 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.35</minimum>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

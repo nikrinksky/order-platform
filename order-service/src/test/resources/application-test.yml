@@ -10,7 +10,11 @@ spring:
     show-sql: false
     properties:
       hibernate:
+        default_schema: orders
         dialect: org.hibernate.dialect.H2Dialect
+  sql:
+    init:
+      mode: never
   kafka:
     enabled: false
   autoconfigure:

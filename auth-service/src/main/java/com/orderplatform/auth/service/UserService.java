@@ -12,6 +12,9 @@ import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -19,7 +22,7 @@ import org.springframework.stereotype.Service;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Service for user operations.
@@ -29,10 +32,14 @@ import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final Logger log = getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    
+    @Autowired(required = false)
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     /**
      * Registers a new user.
@@ -110,7 +117,7 @@ public class UserService {
                 log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
             }
         } else {
-            log.warn("KafkaTemplate is not available - skipping event send");
+            log.warn("KafkaTemplate is not available - skipping UserCreatedEvent send");
         }
     }
 
@@ -140,7 +147,7 @@ public class UserService {
                 log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
             }
         } else {
-            log.warn("KafkaTemplate is not available - skipping event send");
+            log.warn("KafkaTemplate is not available - skipping UserUpdatedEvent send");
         }
     }
 }

@@ -127,7 +127,7 @@ public class SecurityConfig {
     /**
      * Custom authentication entry point handler.
      */
-    class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+    static class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
         @Override
         public void commence(HttpServletRequest request,
                 HttpServletResponse response,
@@ -143,7 +143,7 @@ public class SecurityConfig {
     /**
      * Custom access denied handler.
      */
-    class CustomAccessDeniedHandler implements AccessDeniedHandler {
+    static class CustomAccessDeniedHandler implements AccessDeniedHandler {
         @Override
         public void handle(HttpServletRequest request,
                 HttpServletResponse response,

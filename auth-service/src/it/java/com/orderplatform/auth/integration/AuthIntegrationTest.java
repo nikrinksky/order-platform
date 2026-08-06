@@ -109,10 +109,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
         HttpHeaders refreshHeaders = getJsonHeaders();
         refreshHeaders.set("Authorization", "Bearer " + oldRefreshToken);
+        refreshHeaders.set("X-Refresh-Token", "Bearer " + oldRefreshToken);
 
         ResponseEntity<Map> refreshResponse = restTemplate.postForEntity(
                 getBaseUrl() + "/api/auth/refresh",
-                new HttpEntity<>(null, refreshHeaders),
+                new HttpEntity<>(refreshHeaders),
                 Map.class
         );
 
@@ -155,6 +156,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         );
 
         String accessToken = (String) loginResponse.getBody().get("accessToken");
+        String refreshToken = (String) loginResponse.getBody().get("refreshToken");
 
         // Проверяем, что access token работает
         HttpHeaders meHeaders = getJsonHeaders();
@@ -171,11 +173,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         // Logout
         HttpHeaders logoutHeaders = getJsonHeaders();
         logoutHeaders.set("Authorization", "Bearer " + accessToken);
+        logoutHeaders.set("X-Refresh-Token", "Bearer " + refreshToken);
 
-        ResponseEntity<Map> logoutResponse = restTemplate.exchange(
+        ResponseEntity<Map> logoutResponse = restTemplate.postForEntity(
                 getBaseUrl() + "/api/auth/logout",
-                HttpMethod.POST,
-                new HttpEntity<>(null, logoutHeaders),
+                new HttpEntity<>(logoutHeaders),
                 Map.class
         );
         assertThat(logoutResponse.getStatusCode()).isEqualTo(HttpStatus.OK);

@@ -163,10 +163,10 @@ public class AuthenticationService {
             return response;
         } catch (RuntimeException e) {
             // Re-throw RuntimeException with original message
-            log.error("Refresh token error: {}", e.getMessage());
+            log.error("Refresh token runtime error: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("Refresh token error: {}", e.getMessage());
+            log.error("Refresh token validation error: {}", e.getMessage());
             throw new RuntimeException("Invalid refresh token");
         }
     }
