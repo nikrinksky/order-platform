@@ -1,0 +1,12 @@
+spring:
+  cloud:
+    gateway:
+      default-filters: []
+      routes: []
+  data:
+    redis:
+      host: localhost
+      port: 6379
+logging:
+  level:
+    com.orderplatform.gateway: INFO
