@@ -1,0 +1,24 @@
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 7.0.4
+
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 0
+      database: productdb
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+logging:
+  level:
+    com.orderplatform.product: INFO
+    org.springframework.security: WARN
