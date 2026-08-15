@@ -1,6 +1,7 @@
 package com.orderplatform.user.service;
 
 import com.orderplatform.user.dto.UserCreatedEvent;
+import com.orderplatform.user.dto.UserUpdatedEvent;
 import com.orderplatform.user.model.Role;
 import com.orderplatform.user.model.User;
 import com.orderplatform.user.repository.UserRepository;
@@ -12,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -170,5 +172,96 @@ class UserConsumerServiceTest {
         User savedUser = userCaptor.getValue();
         assertNotNull(savedUser);
         assertNull(savedUser.getLastName());
+    }
+
+    @Test
+    void testConsumeUserUpdated_ExistingUser() {
+        // Given
+        User existingUser = User.builder()
+                .id("test-user-id")
+                .username("old-username")
+                .email("test@example.com")
+                .firstName("Old")
+                .lastName("Name")
+                .roles(Set.of(Role.ROLE_USER))
+                .isActive(true)
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .build();
+        when(userRepository.findById("test-user-id")).thenReturn(Optional.of(existingUser));
+
+        UserUpdatedEvent updatedEvent = UserUpdatedEvent.builder()
+                .id("test-user-id")
+                .username("new-username")
+                .email("test@example.com")
+                .firstName("New")
+                .lastName("Name")
+                .roles(Set.of("ROLE_USER", "ROLE_MANAGER"))
+                .isActive(true)
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        // When
+        assertDoesNotThrow(() -> userConsumerService.consumeUserUpdated(updatedEvent));
+
+        // Then
+        verify(userRepository, times(1)).findById("test-user-id");
+        verify(userRepository, times(1)).save(userCaptor.capture());
+
+        User savedUser = userCaptor.getValue();
+        assertNotNull(savedUser);
+        assertEquals("new-username", savedUser.getUsername());
+        assertEquals("test@example.com", savedUser.getEmail());
+        assertEquals("New", savedUser.getFirstName());
+        assertEquals(2, savedUser.getRoles().size());
+        assertEquals(existingUser.getCreatedAt(), savedUser.getCreatedAt());
+    }
+
+    @Test
+    void testConsumeUserUpdated_UserNotFound() {
+        // Given
+        when(userRepository.findById("nonexistent-id")).thenReturn(Optional.empty());
+
+        UserUpdatedEvent updatedEvent = UserUpdatedEvent.builder()
+                .id("nonexistent-id")
+                .username("new-username")
+                .email("test@example.com")
+                .firstName("New")
+                .lastName("Name")
+                .roles(Set.of("ROLE_USER"))
+                .isActive(true)
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        // When
+        assertDoesNotThrow(() -> userConsumerService.consumeUserUpdated(updatedEvent));
+
+        // Then
+        verify(userRepository, times(1)).findById("nonexistent-id");
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void testConsumeUserUpdated_WithException() {
+        // Given
+        when(userRepository.findById("test-user-id"))
+                .thenThrow(new RuntimeException("DB Error"));
+
+        UserUpdatedEvent updatedEvent = UserUpdatedEvent.builder()
+                .id("test-user-id")
+                .username("new-username")
+                .email("test@example.com")
+                .firstName("New")
+                .lastName("Name")
+                .roles(Set.of("ROLE_USER"))
+                .isActive(true)
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        // When
+        assertDoesNotThrow(() -> userConsumerService.consumeUserUpdated(updatedEvent));
+
+        // Then - exception should be caught and logged
+        verify(userRepository, times(1)).findById("test-user-id");
+        verify(userRepository, never()).save(any(User.class));
     }
 }
