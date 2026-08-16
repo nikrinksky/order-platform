@@ -92,6 +92,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Cache OWASP NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: ${{ runner.os }}-nvd-db
+          restore-keys: |
+            ${{ runner.os }}-nvd-db-
+
       - name: Run Checkstyle
         run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
 
