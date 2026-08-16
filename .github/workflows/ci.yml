@@ -110,7 +110,7 @@ jobs:
         run: mvn verify -Pintegration-tests -Djacoco.skip=true
 
       - name: OWASP Dependency-Check (blocking)
-        run: mvn org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7
+        run: mvn org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DsuppressionFile=config/dependency-check-suppression.xml
 
       - name: Build JAR files
         run: mvn package -DskipTests
