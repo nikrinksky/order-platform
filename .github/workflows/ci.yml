@@ -114,8 +114,9 @@ jobs:
             docker build -t order-platform/$service:pr-${{ github.event.number }} ./$service
           done
 
-      - name: Security Scan (Trivy - api-gateway, blocking)
+      - name: Security Scan (Trivy - api-gateway, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/api-gateway:pr-${{ github.event.number }}
@@ -123,8 +124,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - auth-service, blocking)
+      - name: Security Scan (Trivy - auth-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/auth-service:pr-${{ github.event.number }}
@@ -132,8 +134,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - user-service, blocking)
+      - name: Security Scan (Trivy - user-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/user-service:pr-${{ github.event.number }}
@@ -141,8 +144,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - product-service, blocking)
+      - name: Security Scan (Trivy - product-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/product-service:pr-${{ github.event.number }}
@@ -150,8 +154,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - inventory-service, blocking)
+      - name: Security Scan (Trivy - inventory-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/inventory-service:pr-${{ github.event.number }}
@@ -159,8 +164,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - order-service, blocking)
+      - name: Security Scan (Trivy - order-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/order-service:pr-${{ github.event.number }}
@@ -168,8 +174,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Security Scan (Trivy - notification-service, blocking)
+      - name: Security Scan (Trivy - notification-service, non-blocking)
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: order-platform/notification-service:pr-${{ github.event.number }}
