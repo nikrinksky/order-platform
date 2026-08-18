@@ -27,32 +27,40 @@
         <cve>CVE-2025-15104</cve>
     </suppress>
 
+    <!-- False positive: CVE-2026-66299 is in Tomcat's WebSocket chat EXAMPLE app,
+         not in tomcat-embed-core runtime. We do not ship Tomcat examples. -->
+    <suppress>
+        <notes><![CDATA[Not applicable: CVE-2026-66299 affects Tomcat WebSocket chat example, not embed-core runtime]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/.*@.*$</packageUrl>
+        <cve>CVE-2026-66299</cve>
+    </suppress>
+
     <!-- Test-only dependencies (not shipped in production Docker images) -->
     <suppress>
         <notes><![CDATA[Testcontainers is test-only]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
     <suppress>
         <notes><![CDATA[H2 database is test-only]]></notes>
         <packageUrl regex="true">^pkg:maven/com\.h2database/h2@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
     <suppress>
         <notes><![CDATA[Lombok is compile-time annotation processor, not a runtime dependency]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.projectlombok/lombok@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
 
     <!-- Swagger UI / DOMPurify (dev-only API documentation, not exposed in production) -->
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.webjars/swagger-ui@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
 </suppressions>
