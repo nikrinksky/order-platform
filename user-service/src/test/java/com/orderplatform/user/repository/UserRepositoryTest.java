@@ -25,7 +25,6 @@ class UserRepositoryTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder()
-                .id("test-user-id")
                 .username("testuser")
                 .email("test@example.com")
                 .firstName("Test")
@@ -61,7 +60,6 @@ class UserRepositoryTest {
         userRepository.save(testUser);
 
         User anotherUser = User.builder()
-                .id("another-user-id")
                 .username("anotheruser")
                 .email("another@example.com")
                 .firstName("Another")

@@ -2,113 +2,28 @@
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
     <!--
         OWASP Dependency-Check Suppression File
-        Suppresses CVEs in dependencies managed by Spring Boot BOM 3.3.6
-        until Spring Boot is upgraded.
+        Only test-only and dev-only dependencies are suppressed.
+        Production dependencies are NOT suppressed — they must pass failBuildOnCVSS=7.
     -->
 
-    <!-- Spring Framework (Spring Boot 3.3.6 manages these) -->
+    <!-- Test-only dependencies (not shipped in production Docker images) -->
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/.*@.*$</packageUrl>
+        <notes><![CDATA[Testcontainers is test-only]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*@.*$</packageUrl>
         <cvssBelow>11</cvssBelow>
     </suppress>
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@.*$</packageUrl>
+        <notes><![CDATA[H2 database is test-only]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.h2database/h2@.*$</packageUrl>
         <cvssBelow>11</cvssBelow>
     </suppress>
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.data/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.kafka/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.retry/.*@.*$</packageUrl>
+        <notes><![CDATA[Lombok is compile-time annotation processor, not a runtime dependency]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.projectlombok/lombok@.*$</packageUrl>
         <cvssBelow>11</cvssBelow>
     </suppress>
 
-    <!-- Tomcat (embedded in Spring Boot) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Netty (used by api-gateway / reactor) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.netty/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Jackson (managed by Spring Boot BOM) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/com\.fasterxml\.jackson/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Kafka clients -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.kafka/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Log4j (managed by Spring Boot BOM) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- PostgreSQL JDBC driver -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.postgresql/postgresql@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Hibernate Validator -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.hibernate\.validator/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Eclipse Angus (JAXB runtime) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Apache Commons -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.commons/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- BouncyCastle -->
-    <suppress>
-        <notes><![CDATA[Forced version in root pom.xml]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.bouncycastle/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Swagger UI / DOMPurify (dev-only API docs) -->
+    <!-- Swagger UI / DOMPurify (dev-only API documentation, not exposed in production) -->
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
@@ -117,23 +32,6 @@
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.webjars/swagger-ui@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Test-only dependencies -->
-    <suppress>
-        <notes><![CDATA[Testcontainers is test-only]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[H2 is test-only]]></notes>
-        <packageUrl regex="true">^pkg:maven/com\.h2database/h2@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Lombok is compile-time only]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.projectlombok/lombok@.*$</packageUrl>
         <cvssBelow>11</cvssBelow>
     </suppress>
 </suppressions>
