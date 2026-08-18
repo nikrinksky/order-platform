@@ -92,6 +92,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Cache OWASP NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          # Key includes plugin version: bump it when dependency-check-maven is upgraded
+          # (old schema with VARCHAR(1000) URL column breaks newer plugin versions)
+          key: ${{ runner.os }}-odc-nvd-12.1.0
+          restore-keys: |
+            ${{ runner.os }}-odc-nvd-
+
       - name: Run Checkstyle
         run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
 
@@ -102,6 +112,7 @@ jobs:
         run: mvn verify -Pintegration-tests -Djacoco.skip=true
 
       - name: OWASP Dependency-Check (blocking)
+        timeout-minutes: 60
         run: mvn org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DfailOnError=false -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
       - name: Build JAR files
