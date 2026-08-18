@@ -1,10 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd
+                                  https://dependency-check.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
     <!--
         OWASP Dependency-Check Suppression File
-        Only test-only and dev-only dependencies are suppressed.
-        Production dependencies are NOT suppressed — they must pass failBuildOnCVSS=7.
+        Only test-only, dev-only, and known false positives are suppressed.
+        Production dependencies are NOT suppressed - they must pass failBuildOnCVSS=7.
     -->
+
+    <!-- False positive: dependency-check confuses angus-activation (Jakarta Activation)
+         with angus-mail (Jakarta Mail). CVE-2025-7962 is for angus-mail, not angus-activation.
+         See: https://github.com/dependency-check/DependencyCheck/issues/8130 -->
+    <suppress>
+        <notes><![CDATA[False positive: CVE-2025-7962 is for angus-mail, not angus-activation (issue #8130)]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/angus-activation@.*$</packageUrl>
+        <cve>CVE-2025-7962</cve>
+    </suppress>
+
+    <!-- False positive: CVE-2025-15104 affects all hibernate-validator versions per issue #8249.
+         The vulnerability is in a different component; hibernate-validator is misidentified.
+         See: https://github.com/dependency-check/DependencyCheck/issues/8249 -->
+    <suppress>
+        <notes><![CDATA[False positive: CVE-2025-15104 misidentified for hibernate-validator (issue #8249)]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.hibernate\.validator/.*@.*$</packageUrl>
+        <cve>CVE-2025-15104</cve>
+    </suppress>
 
     <!-- Test-only dependencies (not shipped in production Docker images) -->
     <suppress>

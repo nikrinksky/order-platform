@@ -50,7 +50,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.5.15</spring-boot.version>
+        <spring-boot.version>3.5.16</spring-boot.version>
         <spring-cloud.version>2025.0.3</spring-cloud.version>
         <bouncycastle.version>1.81.1</bouncycastle.version>
     </properties>
@@ -69,8 +69,45 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- CVE fixes: explicit overrides BEFORE spring-boot-dependencies import
+                 (first declaration wins in dependencyManagement) -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>10.1.57</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>10.1.57</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>10.1.57</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-api</artifactId>
+                <version>2.25.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-to-slf4j</artifactId>
+                <version>2.25.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>42.7.13</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>3.18.0</version>
+            </dependency>
             <!-- Force Netty 4.1.136.Final to fix CVE-2026-55831/55833/56817/56819/59901
-                 (Spring Boot 3.5.15 manages 4.1.135.Final).
+                 (Spring Boot 3.5.16 manages 4.1.135.Final).
                  Declared FIRST so it wins over spring-boot-dependencies -->
             <dependency>
                 <groupId>io.netty</groupId>
