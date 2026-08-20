@@ -95,7 +95,7 @@ jobs:
       - name: Cache OWASP NVD database
         uses: actions/cache@v4
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
+          path: ${{ runner.temp }}/odc-nvd
           # Key includes plugin version: bump it when dependency-check-maven is upgraded
           # (old schema with VARCHAR(1000) URL column breaks newer plugin versions)
           key: ${{ runner.os }}-odc-nvd-12.1.0
@@ -112,8 +112,8 @@ jobs:
         run: mvn verify -Pintegration-tests -Djacoco.skip=true
 
       - name: OWASP Dependency-Check (blocking)
-        timeout-minutes: 60
-        run: mvn org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DfailOnError=false -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
+        timeout-minutes: 120
+        run: mvn org.owasp:dependency-check-maven:check -DdataDirectory=${{ runner.temp }}/odc-nvd -DfailBuildOnCVSS=7 -DfailOnError=false -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
       - name: Build JAR files
         run: mvn package -DskipTests
