@@ -12,6 +12,7 @@
     <name>order-platform</name>
 
     <modules>
+        <module>common-security</module>
         <module>auth-service</module>
         <module>api-gateway</module>
         <module>user-service</module>
@@ -142,6 +143,11 @@
                 <artifactId>spring-boot-starter-test</artifactId>
                 <version>${spring-boot.version}</version>
                 <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.orderplatform</groupId>
+                <artifactId>common-security</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

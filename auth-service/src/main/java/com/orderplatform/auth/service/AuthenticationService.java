@@ -6,6 +6,7 @@ package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.AuthConstants;
 import com.orderplatform.auth.dto.LoginRequest;
+import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
 import com.orderplatform.auth.security.JwtService;
@@ -64,7 +65,13 @@ public class AuthenticationService {
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
 
-            String accessToken = jwtService.generateToken(userDetails);
+            Map<String, Object> extraClaims = new HashMap<>();
+            extraClaims.put(JwtService.USER_ID_CLAIM, user.getId());
+            extraClaims.put(JwtService.ROLES_CLAIM, user.getRoles().stream()
+                    .map(Role::getAuthority)
+                    .toList());
+
+            String accessToken = jwtService.generateToken(extraClaims, userDetails);
             String refreshToken = jwtService.generateRefreshToken(userDetails);
 
             user.setLastLogin(LocalDateTime.now());
@@ -132,7 +139,13 @@ public class AuthenticationService {
             }
 
             // Generate new tokens FIRST before revoking old ones
-            String newAccessToken = jwtService.generateToken(userDetails);
+            Map<String, Object> extraClaims = new HashMap<>();
+            extraClaims.put(JwtService.USER_ID_CLAIM, user.getId());
+            extraClaims.put(JwtService.ROLES_CLAIM, user.getRoles().stream()
+                    .map(Role::getAuthority)
+                    .toList());
+
+            String newAccessToken = jwtService.generateToken(extraClaims, userDetails);
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
             // Revoke old access token

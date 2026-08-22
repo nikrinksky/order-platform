@@ -6,6 +6,7 @@ import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -30,6 +31,7 @@ public class InventoryController {
     }
 
     @PostMapping(consumes = "*/*")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<InventoryItem> createInventoryItem(
             @RequestParam("productId") String productId,
             @RequestParam("quantity") Integer quantity) {
@@ -45,6 +47,7 @@ public class InventoryController {
     }
 
     @PatchMapping("/product/{productId}/quantity")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<Void> updateQuantity(
             @PathVariable("productId") String productId,
             @RequestParam Integer quantity) {

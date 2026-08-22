@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -85,7 +86,7 @@ class AuthenticationServiceTest {
         when(authenticationManager.authenticate(any())).thenReturn(authentication);
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
-        when(jwtService.generateToken(userDetails)).thenReturn("access-token");
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("refresh-token");
 
         Map<String, Object> response = authenticationService.login(request);
@@ -106,7 +107,7 @@ class AuthenticationServiceTest {
         when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(jwtService.generateToken(userDetails)).thenReturn("new-access-token");
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
 
         Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
@@ -259,7 +260,7 @@ class AuthenticationServiceTest {
         when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(jwtService.generateToken(userDetails)).thenReturn("new-access-token");
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
         when(jwtService.getExpirationFromToken(oldAccessToken)).thenReturn(System.currentTimeMillis() - 1000);
 

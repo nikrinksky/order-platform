@@ -2,8 +2,6 @@ server:
   port: 8084
 
 spring:
-  security:
-    enabled: false
   datasource:
     url: jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5435}/orderdb
     username: ${SPRING_DATASOURCE_USERNAME:orderuser}
@@ -25,6 +23,15 @@ spring:
       properties:
         spring.json.add.type.headers: false
         spring.json.use.type.headers: false
+
+services:
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://product-service:8089}
+  inventory-service:
+    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8083}
+
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
 
 management:
   endpoints:
@@ -49,5 +56,9 @@ spring:
       properties:
         spring.json.add.type.headers: false
         spring.json.use.type.headers: false
-  security:
-    enabled: false
+
+services:
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://product-service:8089}
+  inventory-service:
+    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8083}
