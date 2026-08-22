@@ -111,6 +111,9 @@ jobs:
       - name: Run Integration Tests
         run: mvn verify -Pintegration-tests -Djacoco.skip=true
 
+      - name: Install modules to local repo (for OWASP default-cli)
+        run: mvn install -DskipTests -Djacoco.skip=true
+
       - name: OWASP Dependency-Check (blocking)
         timeout-minutes: 120
         run: mvn org.owasp:dependency-check-maven:check -DdataDirectory=${{ runner.temp }}/odc-nvd -DfailBuildOnCVSS=7 -DfailOnError=false -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml

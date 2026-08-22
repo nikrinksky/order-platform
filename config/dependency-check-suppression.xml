@@ -56,7 +56,10 @@
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cvssBelow>10</cvssBelow>
+        <cve>CVE-2026-41238</cve>
+        <cve>CVE-2026-41239</cve>
+        <cve>CVE-2026-75838</cve>
+        <cve>CVE-2026-65898</cve>
     </suppress>
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
