@@ -3,12 +3,12 @@ package com.orderplatform.auth;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import com.orderplatform.auth.service.TokenBlacklistService;
@@ -17,12 +17,14 @@ import com.orderplatform.auth.service.TokenBlacklistService;
     "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
     "spring.kafka.enabled=false"
 })
-@MockBean(KafkaTemplate.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = AuthApplication.class)
 @ActiveProfiles("integration-tests")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(SpringExtension.class)
 public abstract class AbstractIntegrationTest {
+
+    @MockitoBean
+    protected KafkaTemplate<String, Object> kafkaTemplate;
 
     @DynamicPropertySource
     static void configureTestProperties(DynamicPropertyRegistry registry) {
