@@ -20,7 +20,7 @@
         <!-- Пропустить проблемный тестовый класс -->
         <test.exclude>**/ProblemTest.java</test.exclude>
         <skipUnitTests>false</skipUnitTests>
-        <spring-kafka.version>3.2.0</spring-kafka.version>
+        <spring-kafka.version>3.3.16</spring-kafka.version>
     </properties>
 
     <dependencies>

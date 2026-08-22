@@ -7,6 +7,7 @@ import com.orderplatform.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,11 +25,13 @@ public class OrderController {
     }
 
     @PostMapping("/{orderId}/reserve")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_MANAGER')")
     public ResponseEntity<OrderResponse> reserveOrder(@PathVariable("orderId") String orderId) {
         return ResponseEntity.ok(orderService.reserveOrder(orderId));
     }
 
     @PatchMapping("/{orderId}/status")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_MANAGER')")
     public ResponseEntity<OrderResponse> updateStatus(
             @PathVariable("orderId") String orderId,
             @RequestParam OrderStatus status) {
@@ -36,11 +39,13 @@ public class OrderController {
     }
 
     @GetMapping("/{orderId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or @orderSecurity.isOwner(#orderId, authentication.name)")
     public ResponseEntity<OrderResponse> getOrderById(@PathVariable("orderId") String orderId) {
         return ResponseEntity.ok(orderService.findById(orderId));
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ROLE_ADMIN') or #userId == authentication.name")
     public ResponseEntity<List<OrderResponse>> getOrdersByUserId(@RequestParam("userId") String userId) {
         return ResponseEntity.ok(orderService.findByUserId(userId));
     }

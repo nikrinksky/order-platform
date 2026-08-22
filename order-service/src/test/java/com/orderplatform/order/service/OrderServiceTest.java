@@ -12,10 +12,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,6 +35,9 @@ class OrderServiceTest {
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private OrderService orderService;
@@ -52,6 +58,13 @@ class OrderServiceTest {
                 .build();
     }
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(orderService, "productServiceUrl", "http://product-service:8089");
+        ReflectionTestUtils.setField(orderService, "inventoryServiceUrl", "http://inventory-service:8083");
+        ReflectionTestUtils.setField(orderService, "kafkaEnabled", false);
+    }
+
     @Test
     void createOrder_shouldReturnCreatedOrder() {
         CreateOrderRequest request = CreateOrderRequest.builder()
@@ -65,6 +78,8 @@ class OrderServiceTest {
                 ))
                 .build();
 
+        when(restTemplate.getForEntity(anyString(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Map.of("price", "10.00")));
         Order savedOrder = sampleOrder();
         when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
 
@@ -107,8 +122,8 @@ class OrderServiceTest {
     void reserveOrder_shouldReserveWhenInventoryAvailable() {
         Order order = sampleOrder();
         when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
-        when(restTemplate.postForEntity(anyString(), any(), eq(Object.class)))
-                .thenReturn(ResponseEntity.ok().build());
+        when(restTemplate.postForEntity(anyString(), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Map.of("reserved", true)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.reserveOrder("order-1");
@@ -120,8 +135,8 @@ class OrderServiceTest {
     void reserveOrder_shouldCancelWhenInventoryUnavailable() {
         Order order = sampleOrder();
         when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
-        when(restTemplate.postForEntity(anyString(), any(), eq(Object.class)))
-                .thenReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+        when(restTemplate.postForEntity(anyString(), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Map.of("reserved", false)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.reserveOrder("order-1");
@@ -143,6 +158,42 @@ class OrderServiceTest {
         when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
 
         assertThrows(RuntimeException.class, () -> orderService.reserveOrder("order-1"));
+    }
+
+    @Test
+    void reserveOrder_shouldReleaseOnPartialFailure() {
+        Order order = Order.builder()
+                .id("order-1")
+                .userId("user-1")
+                .orderNumber("ORD-ABC12345")
+                .status(Order.OrderStatus.NEW)
+                .totalAmount(BigDecimal.ZERO)
+                .items(List.of(
+                        OrderItem.builder()
+                                .productId("product-1")
+                                .productName("Item1")
+                                .quantity(2)
+                                .price(BigDecimal.ZERO)
+                                .build(),
+                        OrderItem.builder()
+                                .productId("product-2")
+                                .productName("Item2")
+                                .quantity(3)
+                                .price(BigDecimal.ZERO)
+                                .build()
+                ))
+                .build();
+
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(restTemplate.postForEntity(contains("/reserve"), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Map.of("reserved", true)))
+                .thenReturn(ResponseEntity.ok(Map.of("reserved", false)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OrderResponse response = orderService.reserveOrder("order-1");
+
+        assertEquals("CANCELLED", response.getStatus());
+        verify(restTemplate, times(1)).postForEntity(contains("/release"), eq(null), eq(Map.class));
     }
 
     @Test

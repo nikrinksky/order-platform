@@ -1,139 +1,69 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd
+                                  https://dependency-check.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
     <!--
         OWASP Dependency-Check Suppression File
-        Suppresses CVEs in dependencies managed by Spring Boot BOM 3.3.6
-        until Spring Boot is upgraded.
+        Only test-only, dev-only, and known false positives are suppressed.
+        Production dependencies are NOT suppressed - they must pass failBuildOnCVSS=7.
     -->
 
-    <!-- Spring Framework (Spring Boot 3.3.6 manages these) -->
+    <!-- False positive: dependency-check confuses angus-activation (Jakarta Activation)
+         with angus-mail (Jakarta Mail). CVE-2025-7962 is for angus-mail, not angus-activation.
+         See: https://github.com/dependency-check/DependencyCheck/issues/8130 -->
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.data/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.kafka/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.retry/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <notes><![CDATA[False positive: CVE-2025-7962 is for angus-mail, not angus-activation (issue #8130)]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/angus-activation@.*$</packageUrl>
+        <cve>CVE-2025-7962</cve>
     </suppress>
 
-    <!-- Tomcat (embedded in Spring Boot) -->
+    <!-- False positive: CVE-2025-15104 affects all hibernate-validator versions per issue #8249.
+         The vulnerability is in a different component; hibernate-validator is misidentified.
+         See: https://github.com/dependency-check/DependencyCheck/issues/8249 -->
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Netty (used by api-gateway / reactor) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.netty/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Jackson (managed by Spring Boot BOM) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/com\.fasterxml\.jackson/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Kafka clients -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.kafka/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Log4j (managed by Spring Boot BOM) -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- PostgreSQL JDBC driver -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.postgresql/postgresql@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Hibernate Validator -->
-    <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
+        <notes><![CDATA[False positive: CVE-2025-15104 misidentified for hibernate-validator (issue #8249)]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.hibernate\.validator/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cve>CVE-2025-15104</cve>
     </suppress>
 
-    <!-- Eclipse Angus (JAXB runtime) -->
+    <!-- False positive: CVE-2026-66299 is in Tomcat's WebSocket chat EXAMPLE app,
+         not in tomcat-embed-core runtime. We do not ship Tomcat examples. -->
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <notes><![CDATA[Not applicable: CVE-2026-66299 affects Tomcat WebSocket chat example, not embed-core runtime]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/.*@.*$</packageUrl>
+        <cve>CVE-2026-66299</cve>
     </suppress>
 
-    <!-- Apache Commons -->
+    <!-- Test-only dependencies (not shipped in production Docker images) -->
     <suppress>
-        <notes><![CDATA[Managed by Spring Boot BOM]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.commons/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <notes><![CDATA[Testcontainers is test-only]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*@.*$</packageUrl>
+        <cvssBelow>10</cvssBelow>
     </suppress>
-
-    <!-- BouncyCastle -->
     <suppress>
-        <notes><![CDATA[Forced version in root pom.xml]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.bouncycastle/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <notes><![CDATA[H2 database is test-only]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.h2database/h2@.*$</packageUrl>
+        <cvssBelow>10</cvssBelow>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[Lombok is compile-time annotation processor, not a runtime dependency]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.projectlombok/lombok@.*$</packageUrl>
+        <cvssBelow>10</cvssBelow>
     </suppress>
 
-    <!-- Swagger UI / DOMPurify (dev-only API docs) -->
+    <!-- Swagger UI / DOMPurify (dev-only API documentation, not exposed in production) -->
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cve>CVE-2026-41238</cve>
+        <cve>CVE-2026-41239</cve>
+        <cve>CVE-2026-75838</cve>
+        <cve>CVE-2026-65898</cve>
     </suppress>
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:maven/org\.webjars/swagger-ui@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-
-    <!-- Test-only dependencies -->
-    <suppress>
-        <notes><![CDATA[Testcontainers is test-only]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[H2 is test-only]]></notes>
-        <packageUrl regex="true">^pkg:maven/com\.h2database/h2@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Lombok is compile-time only]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.projectlombok/lombok@.*$</packageUrl>
-        <cvssBelow>11</cvssBelow>
+        <cvssBelow>10</cvssBelow>
     </suppress>
 </suppressions>

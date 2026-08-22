@@ -31,6 +31,16 @@ public class JwtService {
     public static final String TOKEN_TYPE_CLAIM = "token_use";
 
     /**
+     * Claim name for user ID.
+     */
+    public static final String USER_ID_CLAIM = "userId";
+
+    /**
+     * Claim name for user roles list.
+     */
+    public static final String ROLES_CLAIM = "roles";
+
+    /**
      * Secret key for JWT signing.
      */
     @Value("${jwt.secret}")

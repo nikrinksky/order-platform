@@ -1,5 +1,6 @@
 package com.orderplatform.notification.config;
 
+import com.orderplatform.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.DefaultSecurityFilterChain;
@@ -18,10 +19,11 @@ class SecurityConfigTest {
     void shouldCreateSecurityFilterChain() throws Exception {
         SecurityConfig config = new SecurityConfig();
         HttpSecurity http = mock(HttpSecurity.class, RETURNS_SELF);
+        JwtAuthenticationFilter jwtFilter = mock(JwtAuthenticationFilter.class);
         DefaultSecurityFilterChain chain = mock(DefaultSecurityFilterChain.class);
         when(http.build()).thenReturn(chain);
 
-        SecurityFilterChain result = config.securityFilterChain(http);
+        SecurityFilterChain result = config.securityFilterChain(http, jwtFilter);
 
         assertNotNull(result);
         verify(http).csrf(any());
