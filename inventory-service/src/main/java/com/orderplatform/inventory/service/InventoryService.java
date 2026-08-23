@@ -6,10 +6,13 @@ import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -18,6 +21,10 @@ import java.util.Optional;
 public class InventoryService {
 
     private final InventoryItemRepository inventoryItemRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Value("${spring.kafka.enabled:true}")
+    private boolean kafkaEnabled;
 
     public Optional<InventoryItem> findByProductId(String productId) {
         return inventoryItemRepository.findByProductId(productId);
@@ -46,6 +53,12 @@ public class InventoryService {
             inventoryItemRepository.save(item);
 
             log.info("Reserved {} units of product {} for order {}", request.getQuantity(), request.getProductId(), request.getOrderId());
+            sendKafkaEvent("inventory.reserved", request.getOrderId(), Map.of(
+                    "orderId", request.getOrderId(),
+                    "productId", request.getProductId(),
+                    "quantity", request.getQuantity(),
+                    "available", availableQuantity - request.getQuantity()
+            ));
             return ReservationResponse.builder()
                     .orderId(request.getOrderId())
                     .productId(request.getProductId())
@@ -76,6 +89,11 @@ public class InventoryService {
         inventoryItemRepository.save(item);
 
         log.info("Released {} units of product {} for order {}", quantity, productId, orderId);
+        sendKafkaEvent("inventory.released", orderId, Map.of(
+                "orderId", orderId,
+                "productId", productId,
+                "quantity", quantity
+        ));
         return ReservationResponse.builder()
                 .orderId(orderId)
                 .productId(productId)
@@ -83,6 +101,19 @@ public class InventoryService {
                 .reserved(true)
                 .message("Released successfully")
                 .build();
+    }
+
+    private void sendKafkaEvent(String topic, String key, Object payload) {
+        if (!kafkaEnabled) {
+            log.debug("Kafka disabled, skipping event to topic {}", topic);
+            return;
+        }
+        try {
+            kafkaTemplate.send(topic, key, payload);
+            log.debug("Sent event to topic {} for key {}", topic, key);
+        } catch (Exception e) {
+            log.error("Failed to send Kafka event to topic {}: {}", topic, e.getMessage());
+        }
     }
 
     @Transactional

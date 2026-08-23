@@ -4,12 +4,15 @@ import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
@@ -23,8 +26,16 @@ class InventoryServiceTest {
     @Mock
     private InventoryItemRepository inventoryItemRepository;
 
+    @Mock
+    private KafkaTemplate<String, Object> kafkaTemplate;
+
     @InjectMocks
     private InventoryService inventoryService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(inventoryService, "kafkaEnabled", false);
+    }
 
     private InventoryItem sampleItem() {
         return InventoryItem.builder()
