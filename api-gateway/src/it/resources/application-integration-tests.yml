@@ -1,8 +1,10 @@
 spring:
   cloud:
     gateway:
-      default-filters: []
-      routes: []
+      server:
+        webflux:
+          default-filters: []
+          routes: []
   data:
     redis:
       host: localhost
