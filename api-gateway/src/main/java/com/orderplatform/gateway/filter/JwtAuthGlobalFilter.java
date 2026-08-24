@@ -45,6 +45,12 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
+        // Block internal-only endpoints from external access
+        if (isInternalPath(path)) {
+            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+            return exchange.getResponse().setComplete();
+        }
+
         // Public endpoints - no token required
         if (isPublicPath(path, exchange.getRequest().getMethod().name())) {
             return chain.filter(exchange);
@@ -100,6 +106,15 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
             return true;
         }
         return "GET".equals(method) && path.startsWith("/api/products");
+    }
+
+    /**
+     * Internal-only endpoints that must not be accessible from outside the cluster.
+     * These are called service-to-service (e.g. order-service -> inventory-service).
+     */
+    private boolean isInternalPath(String path) {
+        return path.startsWith("/api/inventory/reserve")
+                || path.startsWith("/api/inventory/release");
     }
 
     private Key getSignInKey() {

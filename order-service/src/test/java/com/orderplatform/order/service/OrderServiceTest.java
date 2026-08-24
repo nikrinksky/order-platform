@@ -7,6 +7,7 @@ import com.orderplatform.order.model.OrderItem;
 import com.orderplatform.order.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -80,15 +81,21 @@ class OrderServiceTest {
 
         when(restTemplate.getForEntity(anyString(), eq(Map.class)))
                 .thenReturn(ResponseEntity.ok(Map.of("price", "10.00")));
-        Order savedOrder = sampleOrder();
-        when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.createOrder(request);
 
         assertNotNull(response);
         assertEquals("user-1", response.getUserId());
         assertEquals("NEW", response.getStatus());
+        assertEquals(new BigDecimal("20.00"), response.getTotalAmount());
         verify(orderRepository, times(1)).save(any(Order.class));
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(captor.capture());
+        Order saved = captor.getValue();
+        assertEquals(new BigDecimal("20.00"), saved.getTotalAmount());
+        assertEquals(new BigDecimal("10.00"), saved.getItems().get(0).getPrice());
     }
 
     @Test

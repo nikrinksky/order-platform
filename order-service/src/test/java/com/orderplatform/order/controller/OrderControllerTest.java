@@ -5,12 +5,15 @@ import com.orderplatform.order.dto.CreateOrderRequest;
 import com.orderplatform.order.dto.OrderResponse;
 import com.orderplatform.order.model.Order;
 import com.orderplatform.order.service.OrderService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -41,6 +44,13 @@ class OrderControllerTest {
 
     @MockBean
     private OrderService orderService;
+
+    @BeforeEach
+    void setUp() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("user-1", null, List.of())
+        );
+    }
 
     private OrderResponse sampleResponse() {
         return OrderResponse.builder()

@@ -21,6 +21,7 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+        request.setUserId(com.orderplatform.common.security.SecurityUtils.getCurrentUserId());
         return ResponseEntity.status(201).body(orderService.createOrder(request));
     }
 

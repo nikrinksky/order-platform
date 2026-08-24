@@ -93,6 +93,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Cache OWASP NVD database
+        id: nvd-cache
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/odc-nvd
@@ -115,8 +116,18 @@ jobs:
         run: mvn install -DskipTests -Djacoco.skip=true
 
       - name: OWASP Dependency-Check (blocking)
-        timeout-minutes: 120
-        run: mvn org.owasp:dependency-check-maven:check -DdataDirectory=${{ runner.temp }}/odc-nvd -DfailBuildOnCVSS=7 -DfailOnError=false -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
+        timeout-minutes: 180
+        env:
+          # Optional: set NVD_API_KEY secret in GitHub to speed up NVD download
+          # (without a key, full NVD sync can take 2+ hours)
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          echo "NVD cache hit: ${{ steps.nvd-cache.outputs.cache-hit }}"
+          mvn org.owasp:dependency-check-maven:check \
+            -DdataDirectory=${{ runner.temp }}/odc-nvd \
+            -DfailBuildOnCVSS=7 \
+            -DfailOnError=false \
+            -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
       - name: Build JAR files
         run: mvn package -DskipTests

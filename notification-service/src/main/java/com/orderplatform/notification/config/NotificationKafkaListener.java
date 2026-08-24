@@ -15,13 +15,21 @@ public class NotificationKafkaListener {
 
     private final NotificationService notificationService;
 
-    @KafkaListener(topics = "order.created", groupId = "notification-service-group")
+    @KafkaListener(
+            topics = "order.created",
+            groupId = "notification-service-group",
+            properties = {"spring.json.value.default.type=com.orderplatform.notification.dto.OrderCreatedEvent"}
+    )
     public void onOrderCreated(OrderCreatedEvent event) {
         log.info("Received order.created event: {}", event.getOrderId());
         notificationService.onOrderCreated(event);
     }
 
-    @KafkaListener(topics = "order.status-changed", groupId = "notification-service-group")
+    @KafkaListener(
+            topics = "order.status-changed",
+            groupId = "notification-service-group",
+            properties = {"spring.json.value.default.type=com.orderplatform.notification.dto.OrderStatusChangedEvent"}
+    )
     public void onOrderStatusChanged(OrderStatusChangedEvent event) {
         log.info("Received order.status-changed event: {}", event.getOrderId());
         notificationService.onOrderStatusChanged(event);
