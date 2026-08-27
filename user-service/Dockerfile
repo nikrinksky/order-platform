@@ -1,5 +1,6 @@
 FROM amazoncorretto:17-alpine
-RUN apk add --no-cache curl bash
+# Upgrade system packages to pick up security fixes (e.g. OpenSSL CVEs)
+RUN apk upgrade --no-cache && apk add --no-cache curl bash
 WORKDIR /app
 COPY target/*.jar app.jar
 COPY wait-for-it.sh /wait-for-it.sh
