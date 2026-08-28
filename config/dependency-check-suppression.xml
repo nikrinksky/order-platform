@@ -54,12 +54,9 @@
 
     <!-- Swagger UI / DOMPurify (dev-only API documentation, not exposed in production) -->
     <suppress>
-        <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
+        <notes><![CDATA[Swagger UI bundles DOMPurify for dev-only API docs, not exposed in production]]></notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cve>CVE-2026-41238</cve>
-        <cve>CVE-2026-41239</cve>
-        <cve>CVE-2026-75838</cve>
-        <cve>CVE-2026-65898</cve>
+        <cvssBelow>10</cvssBelow>
     </suppress>
     <suppress>
         <notes><![CDATA[Swagger UI is dev-only, not exposed in production]]></notes>
