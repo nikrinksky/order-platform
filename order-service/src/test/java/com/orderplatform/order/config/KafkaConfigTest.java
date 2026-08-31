@@ -33,6 +33,8 @@ class KafkaConfigTest {
         assertEquals("localhost:19092",
                 config.get(org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         assertEquals("all", config.get(org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG));
+        assertEquals(false,
+                config.get(org.springframework.kafka.support.serializer.JsonSerializer.ADD_TYPE_INFO_HEADERS));
     }
 
     @Test
