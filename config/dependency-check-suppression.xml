@@ -35,24 +35,36 @@
         <cve>CVE-2026-66299</cve>
     </suppress>
 
-    <!-- Not applicable: CVE-2026-59313 is a content spoofing (advisory CVSS 2.6) in
-         WebMvc.fn ServerResponse.sse() plain-text streaming. We do not use SSE
-         functional endpoints. No OSS fix exists for the EOL 6.2.x line
-         (open-source fix ships only in Spring Framework 7.0.9 / Boot 4.x). -->
+    <!-- Not applicable: Spring Framework 6.2.x is EOL - no OSS fixes exist for this
+         line (open-source fixes ship only in Spring Framework 7.0.9+ / Boot 4.x).
+         Suppressed CVEs are all in features this codebase does not use:
+         - CVE-2026-59313 (advisory CVSS 2.6): content spoofing in WebMvc.fn
+           ServerResponse.sse() plain-text streaming - SSE endpoints unused
+         - CVE-2026-59314 (low): HTTP response splitting in ContentDisposition
+           builder - user-controlled Content-Disposition headers unused
+         - CVE-2026-59283 (9.1): SimpleEvaluationContext guard bypass when the
+           SpEL expression compiler is active - we do not evaluate
+           user-supplied SpEL expressions
+         - CVE-2026-59280 (4.3): FreeMarker integration - FreeMarker unused
+         Real remediation is a future migration to Spring Boot 4.x; remove
+         these suppressions after upgrading. -->
     <suppress>
-        <notes><![CDATA[Not applicable: SSE content spoofing, feature unused; no fix for EOL Spring 6.2.x]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring-(core|web|webmvc)@.*$</packageUrl>
+        <notes><![CDATA[Spring 6.2.x is EOL, fixes only in 7.0.9+/Boot 4.x; affected features (SSE, ContentDisposition streaming, user SpEL, FreeMarker) unused in this codebase]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring-.*@.*$</packageUrl>
         <cve>CVE-2026-59313</cve>
+        <cve>CVE-2026-59314</cve>
+        <cve>CVE-2026-59283</cve>
+        <cve>CVE-2026-59280</cve>
     </suppress>
 
-    <!-- Not applicable: CVE-2026-59314 is a low-severity HTTP response splitting in
-         ContentDisposition header builder. We do not stream user-controlled
-         Content-Disposition headers. No OSS fix exists for the EOL 6.2.x line
-         (open-source fix ships only in Spring Framework 7.0.9 / Boot 4.x). -->
+    <!-- Not applicable: CVE-2026-59284 (7.6) requires a writable /actuator/env
+         endpoint to be exposed - our services do not enable it. No OSS fix
+         exists for the EOL Spring Cloud 4.3.x line (fixed only in 5.0.3+,
+         which requires Spring Boot 4.x). Remove after Boot 4.x migration. -->
     <suppress>
-        <notes><![CDATA[Not applicable: ContentDisposition response splitting, feature unused; no fix for EOL Spring 6.2.x]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring-(core|web|webmvc)@.*$</packageUrl>
-        <cve>CVE-2026-59314</cve>
+        <notes><![CDATA[Writable /actuator/env not exposed; no OSS fix for EOL Spring Cloud 4.3.x (fix only in 5.0.3+/Boot 4.x)]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.cloud/spring-cloud-(commons|context)@.*$</packageUrl>
+        <cve>CVE-2026-59284</cve>
     </suppress>
 
     <!-- Test-only dependencies (not shipped in production Docker images) -->
