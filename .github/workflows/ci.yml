@@ -106,14 +106,34 @@ jobs:
       - name: Run Checkstyle
         run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
 
+      # Retry wrapper: Maven Central occasionally returns HTTP 429 (rate limit)
+      # on bursts of downloads; a short backoff resolves transient failures.
       - name: Run Unit Tests (skip JaCoCo check for PRs)
-        run: mvn test -DskipITs=true -Djacoco.skip=true
+        run: |
+          for i in 1 2 3; do
+            mvn test -DskipITs=true -Djacoco.skip=true && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "::warning::mvn test failed (attempt $i), likely Maven Central 429 - retrying in 30s"
+            sleep 30
+          done
 
       - name: Run Integration Tests
-        run: mvn verify -Pintegration-tests -Djacoco.skip=true
+        run: |
+          for i in 1 2 3; do
+            mvn verify -Pintegration-tests -Djacoco.skip=true && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "::warning::mvn verify failed (attempt $i), likely Maven Central 429 - retrying in 30s"
+            sleep 30
+          done
 
       - name: Install modules to local repo (for OWASP default-cli)
-        run: mvn install -DskipTests -Djacoco.skip=true
+        run: |
+          for i in 1 2 3; do
+            mvn install -DskipTests -Djacoco.skip=true && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "::warning::mvn install failed (attempt $i), likely Maven Central 429 - retrying in 30s"
+            sleep 30
+          done
 
       # OWASP scan: blocking on push to master, non-blocking on PRs.
       # Rationale: NVD keeps publishing new CVEs against the EOL Spring 6.2.x /
