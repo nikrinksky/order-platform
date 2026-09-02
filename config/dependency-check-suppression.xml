@@ -67,6 +67,18 @@
         <cve>CVE-2026-59284</cve>
     </suppress>
 
+    <!-- Not applicable: CVE-2026-59270 (9.1/9.4) is a hardcoded admin credential in
+         Spring Security's embedded UnboundID LDAP server. It is only exploitable
+         when the application declares the embedded LDAP server bean AND ships
+         com.unboundid:unboundid-ldapsdk - we use none of that (JWT auth, no LDAP).
+         No OSS fix exists for the 6.5.x line (fix ships in OSS 7.0.7/7.1.1,
+         requires Spring Boot 4.x). Remove after Boot 4.x migration. -->
+    <suppress>
+        <notes><![CDATA[Embedded UnboundID LDAP server unused (no unboundid-ldapsdk dependency, no LDAP auth); no OSS fix for 6.5.x (only 7.0.7+/Boot 4.x)]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring-security-.*@.*$</packageUrl>
+        <cve>CVE-2026-59270</cve>
+    </suppress>
+
     <!-- Test-only dependencies (not shipped in production Docker images) -->
     <suppress>
         <notes><![CDATA[Testcontainers is test-only]]></notes>
