@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +30,9 @@ public class KafkaConfig {
         configProps.put(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
         configProps.put(org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
         configProps.put(org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG, "all");
+        // Do not embed type headers: the payload classes (Map.of) would otherwise
+        // override the consumer's spring.json.value.default.type resolution
+        configProps.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 

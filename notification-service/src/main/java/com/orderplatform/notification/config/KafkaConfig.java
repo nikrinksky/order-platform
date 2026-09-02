@@ -31,6 +31,10 @@ public class KafkaConfig {
         configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS,
                 JsonDeserializer.class);
         configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.orderplatform.notification.dto");
+        // Ignore producer type headers (e.g. __TypeId__=ImmutableCollections$MapN from Map.of
+        // payloads) and resolve the target type from VALUE_DEFAULT_TYPE / @KafkaListener
+        // properties instead
+        configProps.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
         configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE,
                 com.orderplatform.notification.dto.OrderCreatedEvent.class);
         configProps.put(org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
