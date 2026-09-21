@@ -78,7 +78,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- BouncyCastle - fixed CVE-2025-14813 -->
+        <!-- BouncyCastle (CVE-2025-14813, CVE-2026-8763, CVE-2026-13506) -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>

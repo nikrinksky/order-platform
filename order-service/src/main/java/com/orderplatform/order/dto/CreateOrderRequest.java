@@ -19,6 +19,8 @@ public class CreateOrderRequest {
     @NotBlank(message = "User ID is required")
     private String userId;
 
+    private String idempotencyKey;
+
     @NotEmpty(message = "Order must contain at least one item")
     private List<OrderItemRequest> items;
 
