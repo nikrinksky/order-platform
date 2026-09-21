@@ -105,8 +105,12 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!-- Local override replaces parent excludes, so repeat
+                         the parent ones to keep ITs out of the unit phase -->
                     <excludes>
                         <exclude>**/ProblemTest.java</exclude>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                        <exclude>**/*IT.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
