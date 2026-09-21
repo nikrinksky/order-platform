@@ -20,8 +20,13 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody CreateOrderRequest request) {
         request.setUserId(com.orderplatform.common.security.SecurityUtils.getCurrentUserId());
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            request.setIdempotencyKey(idempotencyKey);
+        }
         return ResponseEntity.status(201).body(orderService.createOrder(request));
     }
 
