@@ -13,6 +13,8 @@
 
     <modules>
         <module>common-security</module>
+        <module>common-events</module>
+        <module>outbox-spring-boot-starter</module>
         <module>auth-service</module>
         <module>api-gateway</module>
         <module>user-service</module>
@@ -55,6 +57,8 @@
         <spring-cloud.version>2025.0.3</spring-cloud.version>
         <!-- BouncyCastle: 1.85 fixes CVE-2026-8763 (CRITICAL) and CVE-2026-13506 (HIGH) -->
         <bouncycastle.version>1.85</bouncycastle.version>
+        <avro.version>1.11.4</avro.version>
+        <confluent.version>7.9.0</confluent.version>
     </properties>
 
     <repositories>
@@ -62,6 +66,15 @@
             <id>central</id>
             <name>Central Repository</name>
             <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <!-- Confluent: kafka-avro-serializer is not published to Maven Central -->
+        <repository>
+            <id>confluent</id>
+            <name>Confluent Repository</name>
+            <url>https://packages.confluent.io/maven/</url>
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>
@@ -159,6 +172,23 @@
                 <groupId>com.orderplatform</groupId>
                 <artifactId>common-security</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.orderplatform</groupId>
+                <artifactId>common-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- Avro contracts: version managed centrally so every service
+                 serializes with the same schema runtime -->
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>${avro.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-avro-serializer</artifactId>
+                <version>${confluent.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -4,20 +4,20 @@ import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
-import org.junit.jupiter.api.BeforeEach;
+import com.orderplatform.outbox.OutboxService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,15 +27,10 @@ class InventoryServiceTest {
     private InventoryItemRepository inventoryItemRepository;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private OutboxService outboxService;
 
     @InjectMocks
     private InventoryService inventoryService;
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(inventoryService, "kafkaEnabled", false);
-    }
 
     private InventoryItem sampleItem() {
         return InventoryItem.builder()
@@ -66,6 +61,26 @@ class InventoryServiceTest {
         assertEquals("Reserved successfully", response.getMessage());
         verify(inventoryItemRepository, times(1)).save(any(InventoryItem.class));
         assertEquals(5, item.getReserved());
+
+        // The event is appended inside the reservation transaction, not sent to Kafka directly
+        verify(outboxService, times(1)).append(eq("inventory.reserved"), eq("order-1"), anyString(),
+                any(com.orderplatform.events.inventory.InventoryReservedEvent.class));
+    }
+
+    @Test
+    void reserve_shouldNotAppendEventWhenInsufficient() {
+        ReservationRequest request = ReservationRequest.builder()
+                .orderId("order-1")
+                .productId("product-1")
+                .quantity(30)
+                .build();
+
+        InventoryItem item = sampleItem();
+        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+
+        inventoryService.reserve(request);
+
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
     }
 
     @Test

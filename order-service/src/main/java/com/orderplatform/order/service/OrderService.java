@@ -1,5 +1,7 @@
 package com.orderplatform.order.service;
 
+import com.orderplatform.events.order.OrderCreatedEvent;
+import com.orderplatform.events.order.OrderStatusChangedEvent;
 import com.orderplatform.order.client.InventoryClient;
 import com.orderplatform.order.dto.CreateOrderRequest;
 import com.orderplatform.order.dto.OrderResponse;
@@ -10,16 +12,18 @@ import com.orderplatform.order.model.Order.OrderStatus;
 import com.orderplatform.order.model.OrderStatusTransitions;
 import com.orderplatform.order.repository.IdempotencyKeyRepository;
 import com.orderplatform.order.repository.OrderRepository;
+import com.orderplatform.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,13 +39,10 @@ public class OrderService {
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final InventoryClient inventoryClient;
     private final RestTemplate restTemplate;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
 
     @Value("${services.product-service.url}")
     private String productServiceUrl;
-
-    @Value("${spring.kafka.enabled:true}")
-    private boolean kafkaEnabled;
 
     @Transactional
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -109,12 +110,14 @@ public class OrderService {
         log.info("Order {} created for user {} with total {}",
                 order.getOrderNumber(), order.getUserId(), order.getTotalAmount());
 
-        sendKafkaEvent("order.created", order.getUserId(), Map.of(
-                "orderId", order.getId(),
-                "userId", order.getUserId(),
-                "orderNumber", order.getOrderNumber(),
-                "totalAmount", order.getTotalAmount()
-        ));
+        outboxService.append(Topics.ORDER_CREATED, order.getId(),
+                order.getId() + ":CREATED",
+                OrderCreatedEvent.newBuilder()
+                        .setOrderId(order.getId())
+                        .setUserId(order.getUserId())
+                        .setOrderNumber(order.getOrderNumber())
+                        .setTotalAmount(toAvroDecimal(order.getTotalAmount()))
+                        .build());
 
         return OrderResponse.from(order);
     }
@@ -162,12 +165,7 @@ public class OrderService {
         OrderStatus finalStatus = order.getStatus();
         log.info("Order {} -> {}", orderId, finalStatus);
 
-        sendKafkaEvent("order.status-changed", order.getUserId(), Map.of(
-                "orderId", order.getId(),
-                "userId", order.getUserId(),
-                "orderNumber", order.getOrderNumber(),
-                "status", finalStatus.name()
-        ));
+        appendStatusChanged(order, finalStatus);
 
         return OrderResponse.from(order);
     }
@@ -198,12 +196,7 @@ public class OrderService {
             releaseReservations(orderId, order.getItems());
         }
 
-        sendKafkaEvent("order.status-changed", order.getUserId(), Map.of(
-                "orderId", order.getId(),
-                "userId", order.getUserId(),
-                "orderNumber", order.getOrderNumber(),
-                "status", status.name()
-        ));
+        appendStatusChanged(order, status);
 
         return OrderResponse.from(order);
     }
@@ -254,16 +247,38 @@ public class OrderService {
         }
     }
 
-    private void sendKafkaEvent(String topic, String key, Object payload) {
-        if (!kafkaEnabled) {
-            log.debug("Kafka disabled, skipping event to topic {}", topic);
-            return;
-        }
-        try {
-            kafkaTemplate.send(topic, key, payload);
-            log.debug("Sent event to topic {} for key {}", topic, key);
-        } catch (Exception e) {
-            log.error("Failed to send Kafka event to topic {}: {}", topic, e.getMessage());
+    /**
+     * Appends the status change event inside the caller's transaction. The event id names the
+     * target status, so a repeated transition of the same order to the same status cannot
+     * produce two events.
+     */
+    private void appendStatusChanged(Order order, OrderStatus status) {
+        outboxService.append(Topics.ORDER_STATUS_CHANGED, order.getId(),
+                order.getId() + ":STATUS:" + status.name(),
+                OrderStatusChangedEvent.newBuilder()
+                        .setOrderId(order.getId())
+                        .setUserId(order.getUserId())
+                        .setOrderNumber(order.getOrderNumber())
+                        .setStatus(status.name())
+                        .build());
+    }
+
+    /**
+     * Encodes a money amount the way the Avro {@code bytes + decimal(19,2)} contract expects it:
+     * the unscaled value as big-endian two's complement, exactly what Avro's own
+     * {@code Conversions.DecimalConversion} produces.
+     */
+    private static ByteBuffer toAvroDecimal(BigDecimal value) {
+        byte[] unscaled = value.setScale(2, RoundingMode.HALF_UP).unscaledValue().toByteArray();
+        return ByteBuffer.wrap(unscaled);
+    }
+
+    /** Kafka topics this service publishes to. Kept here so no string is typed twice. */
+    static final class Topics {
+        static final String ORDER_CREATED = "order.created";
+        static final String ORDER_STATUS_CHANGED = "order.status-changed";
+
+        private Topics() {
         }
     }
 }

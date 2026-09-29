@@ -18,6 +18,9 @@ class KafkaConfigTest {
     void setUp() {
         kafkaConfig = new KafkaConfig();
         ReflectionTestUtils.setField(kafkaConfig, "bootstrapServers", "localhost:19092");
+        ReflectionTestUtils.setField(kafkaConfig, "schemaRegistryUrl", "http://localhost:8081");
+        ReflectionTestUtils.setField(kafkaConfig, "retryBackoffMs", 1000L);
+        ReflectionTestUtils.setField(kafkaConfig, "retryMaxAttempts", 3L);
     }
 
     @Test
@@ -30,6 +33,9 @@ class KafkaConfigTest {
                 config.get(org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         assertEquals("earliest",
                 config.get(org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        // Avro events come from the schema registry, and arrive as typed SpecificRecords
+        assertEquals("http://localhost:8081", config.get("schema.registry.url"));
+        assertEquals(true, config.get("specific.avro.reader"));
     }
 
     @Test

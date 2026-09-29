@@ -8,6 +8,7 @@ import com.orderplatform.order.model.Order;
 import com.orderplatform.order.model.OrderItem;
 import com.orderplatform.order.repository.IdempotencyKeyRepository;
 import com.orderplatform.order.repository.OrderRepository;
+import com.orderplatform.outbox.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,7 +17,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -48,7 +48,7 @@ class OrderServiceTest {
     private RestTemplate restTemplate;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private OutboxService outboxService;
 
     @InjectMocks
     private OrderService orderService;
@@ -56,7 +56,6 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(orderService, "productServiceUrl", "http://product-service:8089");
-        ReflectionTestUtils.setField(orderService, "kafkaEnabled", false);
     }
 
     private Order sampleOrder() {
@@ -131,6 +130,11 @@ class OrderServiceTest {
         Order saved = captor.getValue();
         assertEquals(new BigDecimal("20.00"), saved.getTotalAmount());
         assertEquals(new BigDecimal("10.00"), saved.getItems().get(0).getPrice());
+
+        // The event goes to the outbox, not straight to Kafka: it must live in the same
+        // transaction as the order, otherwise a broker outage loses it
+        verify(outboxService, times(1)).append(eq("order.created"), anyString(), anyString(),
+                any(com.orderplatform.events.order.OrderCreatedEvent.class));
     }
 
     @Test
