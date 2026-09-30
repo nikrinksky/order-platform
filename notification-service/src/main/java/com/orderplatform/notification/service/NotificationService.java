@@ -29,8 +29,7 @@ public class NotificationService {
      */
     @Transactional
     public void onOrderCreated(OrderCreatedEvent event, String eventId) {
-        if (eventId != null && notificationRepository.findByEventId(eventId).isPresent()) {
-            log.info("Notification for event {} already stored, dropping the redelivery", eventId);
+        if (isRedelivery("order.created", eventId)) {
             return;
         }
         log.info("Processing order created event for order: {}", event.getOrderId());
@@ -53,8 +52,7 @@ public class NotificationService {
 
     @Transactional
     public void onOrderStatusChanged(OrderStatusChangedEvent event, String eventId) {
-        if (eventId != null && notificationRepository.findByEventId(eventId).isPresent()) {
-            log.info("Notification for event {} already stored, dropping the redelivery", eventId);
+        if (isRedelivery("order.status-changed", eventId)) {
             return;
         }
         log.info("Processing order status changed event for order: {}", event.getOrderId());
@@ -73,6 +71,24 @@ public class NotificationService {
 
         notificationRepository.save(notification);
         log.info("Notification created for status change: {}", event.getOrderId());
+    }
+
+    /**
+     * Tells whether this delivery was already processed.
+     *
+     * <p>Delivery is at-least-once, so a redelivery has to be recognised and dropped. The event
+     * type is part of the message on purpose: one shared call site keeps the two consumers from
+     * producing log lines that cannot be told apart.
+     *
+     * @param eventType topic the delivery came from, e.g. {@code order.created}
+     * @param eventId   delivery id; null means the producer sent none and nothing can be matched
+     */
+    private boolean isRedelivery(String eventType, String eventId) {
+        if (eventId == null || notificationRepository.findByEventId(eventId).isEmpty()) {
+            return false;
+        }
+        log.info("Dropping redelivery of {} event {}", eventType, eventId);
+        return true;
     }
 
     /** Avro strings arrive as {@link CharSequence}, not {@link String}. */
