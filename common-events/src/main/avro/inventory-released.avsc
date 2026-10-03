@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "InventoryReleasedEvent",
+  "namespace": "com.orderplatform.events.inventory",
+  "doc": "Emitted by inventory-service when a reservation is released. Topic: inventory.released",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "productId", "type": "string"},
+    {"name": "quantity", "type": "int"}
+  ]
+}

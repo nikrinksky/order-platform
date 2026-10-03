@@ -49,6 +49,20 @@
             <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Avro event contracts: the types published to Kafka come from here,
+             so producer and consumer share one schema definition -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transactional outbox: events are stored with the reservation change
+             and published by the relay, so a broker outage cannot lose them -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>outbox-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>

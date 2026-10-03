@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "OrderStatusChangedEvent",
+  "namespace": "com.orderplatform.events.order",
+  "doc": "Emitted by order-service on every order status transition. Topic: order.status-changed",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "userId", "type": "string"},
+    {"name": "orderNumber", "type": "string"},
+    {"name": "status", "type": "string"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "OrderCreatedEvent",
+  "namespace": "com.orderplatform.events.order",
+  "doc": "Emitted by order-service when a new order is created. Topic: order.created",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "userId", "type": "string"},
+    {"name": "orderNumber", "type": "string"},
+    {"name": "totalAmount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 19, "scale": 2}}
+  ]
+}

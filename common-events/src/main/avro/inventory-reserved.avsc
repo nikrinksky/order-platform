@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "InventoryReservedEvent",
+  "namespace": "com.orderplatform.events.inventory",
+  "doc": "Emitted by inventory-service when stock is reserved for an order. Topic: inventory.reserved",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "productId", "type": "string"},
+    {"name": "quantity", "type": "int"}
+  ]
+}

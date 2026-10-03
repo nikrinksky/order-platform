@@ -21,10 +21,7 @@ class KafkaConfigTest {
     void setUp() {
         kafkaConfig = new KafkaConfig();
         ReflectionTestUtils.setField(kafkaConfig, "bootstrapServers", "localhost:19092");
-        ReflectionTestUtils.setField(kafkaConfig, "keySerializer",
-                "org.apache.kafka.common.serialization.StringSerializer");
-        ReflectionTestUtils.setField(kafkaConfig, "valueSerializer",
-                "org.springframework.kafka.support.serializer.JsonSerializer");
+        ReflectionTestUtils.setField(kafkaConfig, "schemaRegistryUrl", "http://localhost:8081");
     }
 
     @Test
@@ -37,11 +34,14 @@ class KafkaConfigTest {
         Map<String, Object> config = factory.getConfigurationProperties();
         assertEquals("localhost:19092",
                 config.get(org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        assertEquals("org.apache.kafka.common.serialization.StringSerializer",
+        assertEquals(org.apache.kafka.common.serialization.StringSerializer.class,
                 config.get(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
-        assertEquals("org.springframework.kafka.support.serializer.JsonSerializer",
+        assertEquals(io.confluent.kafka.serializers.KafkaAvroSerializer.class,
                 config.get(org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
         assertEquals("all", config.get(org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG));
+        assertEquals(true,
+                config.get(org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
+        assertEquals("http://localhost:8081", config.get("schema.registry.url"));
     }
 
     @Test

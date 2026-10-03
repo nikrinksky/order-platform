@@ -1,7 +1,7 @@
 package com.orderplatform.notification.service;
 
-import com.orderplatform.notification.dto.OrderCreatedEvent;
-import com.orderplatform.notification.dto.OrderStatusChangedEvent;
+import com.orderplatform.events.order.OrderCreatedEvent;
+import com.orderplatform.events.order.OrderStatusChangedEvent;
 import com.orderplatform.notification.model.Notification;
 import com.orderplatform.notification.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
@@ -11,6 +11,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,12 +31,7 @@ class NotificationServiceTest {
 
     @Test
     void onOrderCreated_shouldCreateNotification() {
-        OrderCreatedEvent event = OrderCreatedEvent.builder()
-                .orderId("order-1")
-                .userId("user-1")
-                .orderNumber("ORD-ABC12345")
-                .totalAmount(new BigDecimal("99.99"))
-                .build();
+        OrderCreatedEvent event = orderCreated();
 
         Notification savedNotification = Notification.builder()
                 .id("notif-1")
@@ -44,19 +41,30 @@ class NotificationServiceTest {
                 .sent(false)
                 .build();
 
+        when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.empty());
         when(notificationRepository.save(any(Notification.class))).thenReturn(savedNotification);
 
-        assertDoesNotThrow(() -> notificationService.onOrderCreated(event));
+        assertDoesNotThrow(() -> notificationService.onOrderCreated(event, "event-1"));
         verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 
     @Test
+    void onOrderCreated_shouldDropRedeliveryOfKnownEvent() {
+        when(notificationRepository.findByEventId("event-1"))
+                .thenReturn(Optional.of(Notification.builder().id("notif-1").build()));
+
+        notificationService.onOrderCreated(orderCreated(), "event-1");
+
+        verify(notificationRepository, never()).save(any(Notification.class));
+    }
+
+    @Test
     void onOrderStatusChanged_shouldCreateNotification() {
-        OrderStatusChangedEvent event = OrderStatusChangedEvent.builder()
-                .orderId("order-1")
-                .userId("user-1")
-                .orderNumber("ORD-ABC12345")
-                .status("PAID")
+        OrderStatusChangedEvent event = OrderStatusChangedEvent.newBuilder()
+                .setOrderId("order-1")
+                .setUserId("user-1")
+                .setOrderNumber("ORD-ABC12345")
+                .setStatus("PAID")
                 .build();
 
         Notification savedNotification = Notification.builder()
@@ -67,10 +75,44 @@ class NotificationServiceTest {
                 .sent(false)
                 .build();
 
+        when(notificationRepository.findByEventId("event-2")).thenReturn(Optional.empty());
         when(notificationRepository.save(any(Notification.class))).thenReturn(savedNotification);
 
-        assertDoesNotThrow(() -> notificationService.onOrderStatusChanged(event));
+        assertDoesNotThrow(() -> notificationService.onOrderStatusChanged(event, "event-2"));
         verify(notificationRepository, times(1)).save(any(Notification.class));
+    }
+
+    @Test
+    void onOrderStatusChanged_shouldStoreEvenWithoutEventId() {
+        // A producer that sent no delivery id leaves nothing to match a redelivery on,
+        // so the notification is stored rather than silently dropped
+        OrderStatusChangedEvent event = OrderStatusChangedEvent.newBuilder()
+                .setOrderId("order-1")
+                .setUserId("user-1")
+                .setOrderNumber("ORD-ABC12345")
+                .setStatus("PAID")
+                .build();
+
+        when(notificationRepository.save(any(Notification.class)))
+                .thenReturn(Notification.builder().id("notif-1").build());
+
+        notificationService.onOrderStatusChanged(event, null);
+
+        verify(notificationRepository, times(1)).save(any(Notification.class));
+    }
+
+    private static OrderCreatedEvent orderCreated() {
+        return OrderCreatedEvent.newBuilder()
+                .setOrderId("order-1")
+                .setUserId("user-1")
+                .setOrderNumber("ORD-ABC12345")
+                .setTotalAmount(decimal("99.99"))
+                .build();
+    }
+
+    /** Same encoding the producer uses for the Avro decimal(19,2) contract. */
+    private static ByteBuffer decimal(String value) {
+        return ByteBuffer.wrap(new BigDecimal(value).setScale(2).unscaledValue().toByteArray());
     }
 
     @Test

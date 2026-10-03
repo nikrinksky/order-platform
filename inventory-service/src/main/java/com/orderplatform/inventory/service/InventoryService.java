@@ -1,18 +1,18 @@
 package com.orderplatform.inventory.service;
 
+import com.orderplatform.events.inventory.InventoryReleasedEvent;
+import com.orderplatform.events.inventory.InventoryReservedEvent;
 import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
+import com.orderplatform.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -20,11 +20,12 @@ import java.util.Optional;
 @Slf4j
 public class InventoryService {
 
-    private final InventoryItemRepository inventoryItemRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    /** Kafka topics this service publishes to. Kept here so no string is typed twice. */
+    private static final String TOPIC_RESERVED = "inventory.reserved";
+    private static final String TOPIC_RELEASED = "inventory.released";
 
-    @Value("${spring.kafka.enabled:true}")
-    private boolean kafkaEnabled;
+    private final InventoryItemRepository inventoryItemRepository;
+    private final OutboxService outboxService;
 
     public Optional<InventoryItem> findByProductId(String productId) {
         return inventoryItemRepository.findByProductId(productId);
@@ -52,13 +53,17 @@ public class InventoryService {
             item.setUpdatedAt(LocalDateTime.now());
             inventoryItemRepository.save(item);
 
-            log.info("Reserved {} units of product {} for order {}", request.getQuantity(), request.getProductId(), request.getOrderId());
-            sendKafkaEvent("inventory.reserved", request.getOrderId(), Map.of(
-                    "orderId", request.getOrderId(),
-                    "productId", request.getProductId(),
-                    "quantity", request.getQuantity(),
-                    "available", availableQuantity - request.getQuantity()
-            ));
+            log.info("Reserved {} units of product {} for order {}",
+                    request.getQuantity(), request.getProductId(), request.getOrderId());
+            // The event id names the reservation, so a retried order cannot reserve
+            // the stock twice and emit the same event twice.
+            outboxService.append(TOPIC_RESERVED, request.getOrderId(),
+                    request.getOrderId() + ":RESERVED:" + request.getProductId(),
+                    InventoryReservedEvent.newBuilder()
+                            .setOrderId(request.getOrderId())
+                            .setProductId(request.getProductId())
+                            .setQuantity(request.getQuantity())
+                            .build());
             return ReservationResponse.builder()
                     .orderId(request.getOrderId())
                     .productId(request.getProductId())
@@ -89,11 +94,15 @@ public class InventoryService {
         inventoryItemRepository.save(item);
 
         log.info("Released {} units of product {} for order {}", quantity, productId, orderId);
-        sendKafkaEvent("inventory.released", orderId, Map.of(
-                "orderId", orderId,
-                "productId", productId,
-                "quantity", quantity
-        ));
+        // Releasing the same reservation twice is a real scenario (a retried compensation),
+        // so the event id names the release and the second one is not stored.
+        outboxService.append(TOPIC_RELEASED, orderId,
+                orderId + ":RELEASED:" + productId,
+                InventoryReleasedEvent.newBuilder()
+                        .setOrderId(orderId)
+                        .setProductId(productId)
+                        .setQuantity(quantity)
+                        .build());
         return ReservationResponse.builder()
                 .orderId(orderId)
                 .productId(productId)
@@ -101,19 +110,6 @@ public class InventoryService {
                 .reserved(true)
                 .message("Released successfully")
                 .build();
-    }
-
-    private void sendKafkaEvent(String topic, String key, Object payload) {
-        if (!kafkaEnabled) {
-            log.debug("Kafka disabled, skipping event to topic {}", topic);
-            return;
-        }
-        try {
-            kafkaTemplate.send(topic, key, payload);
-            log.debug("Sent event to topic {} for key {}", topic, key);
-        } catch (Exception e) {
-            log.error("Failed to send Kafka event to topic {}: {}", topic, e.getMessage());
-        }
     }
 
     @Transactional
