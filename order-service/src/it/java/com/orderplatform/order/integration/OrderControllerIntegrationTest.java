@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -17,8 +18,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration тест для Order Controller.
+ *
+ * <p>The controller reads the caller from {@code SecurityUtils.getCurrentUserId()}, so an
+ * authenticated context is required; the mock user name is what ends up in {@code userId}.
  */
 @AutoConfigureMockMvc
+@WithMockUser(username = "test-user-123")
 class OrderControllerIntegrationTest extends AbstractOrderIntegrationTest {
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Autowired

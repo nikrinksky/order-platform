@@ -55,8 +55,10 @@ class UserIntegrationTest extends AbstractUserIntegrationTest {
 
     @Test
     void testGetAllUsers_WithUsers() {
+        // The id is left to the @GeneratedValue UUID generator: setting it manually makes
+        // Spring Data call merge() instead of persist(), which Hibernate 6 rejects for a
+        // row that does not exist yet (StaleObjectStateException).
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
                 .username("testuser_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .firstName("Test")
@@ -108,8 +110,8 @@ class UserIntegrationTest extends AbstractUserIntegrationTest {
 
     @Test
     void testGetUserByEmail_Exists() {
+        // See testGetAllUsers_WithUsers for why the id is not set explicitly.
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
                 .username("getbyemail_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("getbyemail" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .firstName("Get")

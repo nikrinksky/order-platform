@@ -61,6 +61,10 @@
              and 1.12.0 are affected). Also the version of the avro-maven-plugin. -->
         <avro.version>1.11.5</avro.version>
         <confluent.version>7.9.0</confluent.version>
+        <!-- Integration tests (*IT, *IntegrationTest) stay off for a plain build and are enabled
+             by the integration-tests profile below. The default lives here, not in each module:
+             a module-level property would override the profile and silently skip the tests. -->
+        <skipITs>true</skipITs>
     </properties>
 
     <repositories>
