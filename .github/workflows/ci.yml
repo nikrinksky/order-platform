@@ -63,17 +63,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-    env:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orderplatform
-      SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: dev123
-      USER_DB_URL: jdbc:postgresql://localhost:5433/userdb
-      USER_DB_USERNAME: userplatform
-      USER_DB_PASSWORD: dev123
-      SPRING_REDIS_HOST: localhost
-      SPRING_REDIS_PORT: '6379'
-      SPRING_DATA_MONGODB_URI: mongodb://admin:dev123@localhost:27017/orderplatform
-
+    # No runtime connection settings here on purpose. The integration tests boot their own
+    # embedded H2 / embedded Mongo, and an environment variable outranks
+    # application-integration-tests.yml. Exporting SPRING_DATASOURCE_URL / SPRING_DATA_MONGODB_URI
+    # at job level therefore leaked into the tests and broke them (product and notification failed
+    # with Mongo 'Command delete requires authentication': the app client picked the external
+    # credentials up while flapdoodle still started an embedded server that expected its own).
     steps:
       - uses: actions/checkout@v4
 
