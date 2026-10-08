@@ -20,7 +20,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <test.exclude>**/ProblemTest.java</test.exclude>
         <skipUnitTests>false</skipUnitTests>
-        <skipITs>true</skipITs>
         <spring-kafka.version>3.3.16</spring-kafka.version>
         <jjwt.version>0.11.5</jjwt.version>
     </properties>
