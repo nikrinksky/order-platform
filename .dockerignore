@@ -1,0 +1,32 @@
+# The build context is the repository root (the services depend on the sibling modules
+# common-security / common-events / outbox-spring-boot-starter), so this file keeps the
+# context to what the Maven build actually needs.
+
+# Build output: the image builds its own jars, copying stale ones in only confuses caching
+target/
+**/target/
+
+# Version control and IDE
+.git/
+.gitignore
+.idea/
+*.iml
+
+# Local secrets: never send these into the build context
+.env
+.env.local
+.env.*.local
+
+# Logs and scratch files
+*.log
+*.tmp
+effective-pom
+query.sql
+Task.md
+Task1.txt
+register-user.json
+Postman_Collection.json
+
+# Local helper scripts and docs are not needed inside the image
+*.ps1
+*.md
