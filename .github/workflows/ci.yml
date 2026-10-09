@@ -164,13 +164,16 @@ jobs:
             -DfailOnError=false \
             -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
-      - name: Build JAR files
-        run: mvn package -DskipTests
-
       - name: Build Docker Images
+        env:
+          # The Dockerfiles use a BuildKit cache mount for ~/.m2 and a `# syntax` directive.
+          DOCKER_BUILDKIT: 1
         run: |
+          # The build context is the repository root: each Dockerfile is multi-stage and builds
+          # its jar from the sibling modules (common-security, common-events, outbox-starter),
+          # so no pre-built target/*.jar is required anymore.
           for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
-            docker build -t order-platform/$service:pr-${{ github.event.number }} ./$service
+            docker build -t order-platform/$service:pr-${{ github.event.number }} -f ./$service/Dockerfile .
           done
 
       # Trivy image scan: blocking on push to master, non-blocking on PRs - the same policy

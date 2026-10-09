@@ -28,25 +28,37 @@ order-platform/
 
 ### Запуск через Docker Compose (Рекомендуется)
 
-```bash
-# Запуск всей инфраструктуры + сервисов
-docker-compose up -d
+**Сначала задайте секреты.** Без `JWT_SECRET` вход не работает: `login` отвечает `401` даже на
+верный пароль, и никакой причины в ответе нет — она видна только в логе auth-service. Файл
+`.env` добавлен в `.gitignore`, поэтому в репозитории его нет.
 
-# Инициализация схем баз данных (для auth-service и user-service)
+```bash
+# 1. Секреты (обязательно). Скопируйте шаблон и заполните значения.
+cp .env.example .env
+#    JWT_SECRET  - не короче 32 символов
+#    POSTGRES_PASSWORD / REDIS_PASSWORD - пароли инфраструктуры
+
+# 2. Сборка и запуск. Образы собираются из исходников (multi-stage Dockerfile), поэтому
+#    предварительный "mvn package" не нужен: "docker compose build" работает на чистом клоне.
+docker compose up -d --build
+
+# 3. Инициализация схем баз данных (для auth-service и user-service)
 .\init-db-schemas.ps1
 
 # Остановка
-docker-compose down
+docker compose down
 
 # Остановка с удалением volumes
-docker-compose down -v
+docker compose down -v
 
 # Просмотр логов
-docker-compose logs -f
+docker compose logs -f
 
 # Запуск с dev-инструментами (pgAdmin, mongo-express и т.д.)
-docker-compose --profile dev up -d
+docker compose --profile dev up -d
 ```
+
+> В Windows PowerShell вместо `cp` используйте `Copy-Item .env.example .env`.
 
 ### Локальный запуск (для разработки)
 
@@ -144,6 +156,8 @@ Testcontainers на Linux работают без проблем через Unix
 
 Основные переменные для каждого сервиса:
 
+- `JWT_SECRET` - **обязательна**: общий секрет подписи JWT (не короче 32 символов). Задаётся в `.env`,
+  без неё `login` возвращает `401` даже на верный пароль
 - `SPRING_PROFILES_ACTIVE` - активный профиль (docker/dev)
 - `SPRING_DATASOURCE_URL` - JDBC URL для PostgreSQL
 - `SPRING_DATA_REDIS_HOST` - хост Redis

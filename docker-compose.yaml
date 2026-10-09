@@ -188,8 +188,8 @@ services:
   # ============= MICROSERVICES =============
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./auth-service/Dockerfile
     ports:
       - "8090:8090"
     environment:
@@ -224,8 +224,8 @@ services:
 
   api-gateway:
     build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./api-gateway/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -250,8 +250,8 @@ services:
 
   user-service:
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./user-service/Dockerfile
     ports:
       - "8082:8082"
     environment:
@@ -273,8 +273,8 @@ services:
 
   product-service:
     build:
-      context: ./product-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./product-service/Dockerfile
     ports:
       - "8089:8089"
     environment:
@@ -297,8 +297,8 @@ services:
 
   inventory-service:
     build:
-      context: ./inventory-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./inventory-service/Dockerfile
     ports:
       - "8083:8083"
     environment:
@@ -322,8 +322,8 @@ services:
 
   order-service:
     build:
-      context: ./order-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./order-service/Dockerfile
     ports:
       - "8084:8084"
     environment:
@@ -347,8 +347,8 @@ services:
 
   notification-service:
     build:
-      context: ./notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./notification-service/Dockerfile
     ports:
       - "8085:8085"
     environment:

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven settings used only inside the Docker build (the Dockerfiles pass it with `mvn -s`).
+
+  Maven Central's default endpoint (https://repo.maven.apache.org/maven2) is unreachable from
+  some corporate networks - it answers HTTP 403 - while the Google-hosted read-only mirror of
+  Central stays reachable. Mirroring the `central` repository to it keeps "docker compose build"
+  working on a clean clone. The Confluent repository declared in the root pom is not mirrored
+  because kafka-avro-serializer is not published to Central.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    <mirrors>
+        <mirror>
+            <id>google-maven-central</id>
+            <name>Google mirror of Maven Central</name>
+            <url>https://maven-central.storage-download.googleapis.com/maven2</url>
+            <mirrorOf>central</mirrorOf>
+        </mirror>
+    </mirrors>
+</settings>
