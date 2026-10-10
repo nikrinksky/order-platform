@@ -51,6 +51,15 @@ jwt:
   expiration: 3600000
   refresh-expiration: 604800000
 
+# Bootstrap of the first administrator. Without it no account can manage the catalog, stock or
+# orders: registration always assigns ROLE_USER. Leave ADMIN_EMAIL / ADMIN_PASSWORD empty to skip
+# the bootstrap (tests and local runs do not need it).
+admin:
+  email: ${ADMIN_EMAIL:}
+  password: ${ADMIN_PASSWORD:}
+  first-name: ${ADMIN_FIRST_NAME:Admin}
+  last-name: ${ADMIN_LAST_NAME:User}
+
 server:
   port: 8090
   error:

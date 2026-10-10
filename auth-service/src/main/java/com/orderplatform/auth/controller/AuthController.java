@@ -3,7 +3,9 @@ package com.orderplatform.auth.controller;
 import com.orderplatform.auth.AuthConstants;
 import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
+import com.orderplatform.auth.dto.UpdateRolesRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
 import com.orderplatform.auth.service.AuthenticationService;
@@ -16,10 +18,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,6 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -46,6 +53,35 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Update user roles", description = "Replaces the roles of a user; administrator only")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Roles updated"),
+            @ApiResponse(responseCode = "400", description = "Unknown role in the request"),
+            @ApiResponse(responseCode = "403", description = "Caller is not an administrator"),
+            @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @PutMapping("/users/{id}/roles")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Object> updateRoles(@PathVariable("id") String id,
+                                              @Valid @RequestBody UpdateRolesRequest request) {
+        Set<Role> roles;
+        try {
+            roles = request.getRoles().stream()
+                    .map(Role::valueOf)
+                    .collect(Collectors.toSet());
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Unknown role: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+
+        try {
+            return ResponseEntity.ok(userService.updateRoles(id, roles));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
 

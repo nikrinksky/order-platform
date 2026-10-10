@@ -3,6 +3,7 @@ package com.orderplatform.auth.exception;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -35,5 +36,15 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertTrue(response.getBody().get("error").contains("already exists"));
+    }
+
+    @Test
+    void handleAccessDenied_shouldReturnForbidden() {
+        AccessDeniedException ex = new AccessDeniedException("Access Denied");
+
+        ResponseEntity<Map<String, String>> response = handler.handleAccessDenied(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("Forbidden", response.getBody().get("error"));
     }
 }

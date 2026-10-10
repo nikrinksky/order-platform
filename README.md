@@ -37,6 +37,7 @@ order-platform/
 cp .env.example .env
 #    JWT_SECRET  - не короче 32 символов
 #    POSTGRES_PASSWORD / REDIS_PASSWORD - пароли инфраструктуры
+#    ADMIN_EMAIL / ADMIN_PASSWORD - первый администратор (см. ниже)
 
 # 2. Сборка и запуск. Образы собираются из исходников (multi-stage Dockerfile), поэтому
 #    предварительный "mvn package" не нужен: "docker compose build" работает на чистом клоне.
@@ -158,6 +159,10 @@ Testcontainers на Linux работают без проблем через Unix
 
 - `JWT_SECRET` - **обязательна**: общий секрет подписи JWT (не короче 32 символов). Задаётся в `.env`,
   без неё `login` возвращает `401` даже на верный пароль
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` - **первый администратор**. auth-service создаёт эту учётную запись
+  при старте с ролью `ROLE_ADMIN`. Без неё админа можно получить только SQL-ом: регистрация всегда
+  выдаёт `ROLE_USER`, а создавать товары/остатки и двигать заказы может только админ/менеджер.
+  Если переменные пусты, bootstrap пропускается
 - `SPRING_PROFILES_ACTIVE` - активный профиль (docker/dev)
 - `SPRING_DATASOURCE_URL` - JDBC URL для PostgreSQL
 - `SPRING_DATA_REDIS_HOST` - хост Redis

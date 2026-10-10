@@ -1,6 +1,8 @@
 package com.orderplatform.auth.integration;
 
 import com.orderplatform.auth.AbstractIntegrationTest;
+import com.orderplatform.auth.model.Role;
+import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,7 +11,9 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -229,5 +233,80 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    private String loginAndGetAccessToken(String email, String password) {
+        Map<String, String> loginRequest = Map.of(
+                "email", email,
+                "password", password
+        );
+
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                getBaseUrl() + "/api/auth/login",
+                new HttpEntity<>(loginRequest, getJsonHeaders()),
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return (String) response.getBody().get("accessToken");
+    }
+
+    /**
+     * An administrator must be able to promote an account: registration only ever assigns
+     * ROLE_USER, so without this endpoint roles can only be changed with SQL.
+     */
+    @Test
+    void testUpdateRoles_AdminCanChangeRoles() {
+        String adminEmail = generateUniqueEmail("admin");
+        String userEmail = generateUniqueEmail("promote");
+        registerUser(adminEmail, "password123", "Admin", "User");
+        registerUser(userEmail, "password123", "Promote", "User");
+
+        // Grant the admin role directly; the startup bootstrap itself is covered by unit tests.
+        User admin = userRepository.findByEmail(adminEmail).orElseThrow();
+        admin.setRoles(Set.of(Role.ROLE_ADMIN));
+        userRepository.save(admin);
+
+        String adminToken = loginAndGetAccessToken(adminEmail, "password123");
+        User target = userRepository.findByEmail(userEmail).orElseThrow();
+
+        HttpHeaders headers = getJsonHeaders();
+        headers.set("Authorization", "Bearer " + adminToken);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                getBaseUrl() + "/api/auth/users/" + target.getId() + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(Map.of("roles", List.of("ROLE_MANAGER")), headers),
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        User updated = userRepository.findByEmail(userEmail).orElseThrow();
+        assertThat(updated.getRoles()).containsExactly(Role.ROLE_MANAGER);
+    }
+
+    /**
+     * The endpoint must not be reachable by a regular user, otherwise anyone could grant
+     * themselves ROLE_ADMIN.
+     */
+    @Test
+    void testUpdateRoles_NonAdminIsForbidden() {
+        String userEmail = generateUniqueEmail("plain");
+        registerUser(userEmail, "password123", "Plain", "User");
+        String token = loginAndGetAccessToken(userEmail, "password123");
+        User target = userRepository.findByEmail(userEmail).orElseThrow();
+
+        HttpHeaders headers = getJsonHeaders();
+        headers.set("Authorization", "Bearer " + token);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                getBaseUrl() + "/api/auth/users/" + target.getId() + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(Map.of("roles", List.of("ROLE_ADMIN")), headers),
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 }
