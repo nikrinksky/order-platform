@@ -35,6 +35,7 @@ class UserControllerIntegrationTest extends AbstractUserIntegrationTest {
     @Test
     void shouldGetAllUsers() throws Exception {
         userRepository.save(User.builder()
+                .id(UUID.randomUUID().toString())
                 .username("testuser_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .firstName("Test")
@@ -50,6 +51,7 @@ class UserControllerIntegrationTest extends AbstractUserIntegrationTest {
     @Test
     void shouldGetUserById() throws Exception {
         User user = userRepository.save(User.builder()
+                .id(UUID.randomUUID().toString())
                 .username("getbyid_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("getbyid" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .firstName("Get")
