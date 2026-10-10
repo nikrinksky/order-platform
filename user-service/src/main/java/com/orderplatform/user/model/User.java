@@ -2,7 +2,6 @@ package com.orderplatform.user.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.GenericGenerator;
 
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -16,9 +15,16 @@ import java.util.Set;
 @Builder
 public class User {
 
+    /**
+     * Identifier of the user, assigned by auth-service when the account is registered and carried
+     * in the {@code user.created} / {@code user.updated} events.
+     *
+     * <p>It is <em>not</em> generated here on purpose. A generator on an assigned id makes Spring
+     * Data treat the entity as detached and call {@code merge()} instead of {@code persist()},
+     * which Hibernate 6 rejects with {@code StaleObjectStateException} for a row that does not
+     * exist yet - so no user was ever stored.
+     */
     @Id
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
     @Column(updatable = false, nullable = false)
     private String id;
 
