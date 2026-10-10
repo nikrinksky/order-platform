@@ -19,6 +19,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -88,6 +90,75 @@ public class UserService {
         sendUserUpdatedEvent(updatedUser);
 
         return userMapper.toDto(updatedUser);
+    }
+
+    /**
+     * Replaces the roles of a user.
+     *
+     * <p>Registration always assigns {@code ROLE_USER}, so this is the only way to promote an
+     * account to {@code ROLE_MANAGER} or {@code ROLE_ADMIN} without touching the database.
+     *
+     * @param userId the user ID whose roles are replaced
+     * @param roles the new, non-empty set of roles
+     * @return the updated user DTO
+     */
+    public UserDto updateRoles(String userId, Set<Role> roles) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+
+        user.setRoles(roles);
+
+        User updatedUser = userRepository.save(user);
+
+        sendUserUpdatedEvent(updatedUser);
+
+        log.info("Roles updated for user {}: {}", updatedUser.getEmail(), roles);
+
+        return userMapper.toDto(updatedUser);
+    }
+
+    /**
+     * Ensures an administrator account exists, creating it on first startup.
+     *
+     * <p>Idempotent by design: an account that already carries {@code ROLE_ADMIN} is left
+     * untouched, and an account that exists without the role gets it granted - its password is
+     * never overwritten, so the bootstrap cannot lock out a real user sharing the address.
+     *
+     * @param email administrator email
+     * @param password administrator password, used only when the account is created
+     * @param firstName administrator first name
+     * @param lastName administrator last name
+     */
+    public void ensureAdmin(String email, String password, String firstName, String lastName) {
+        Optional<User> existing = userRepository.findByEmail(email);
+
+        if (existing.isPresent()) {
+            User admin = existing.get();
+            if (admin.getRoles().contains(Role.ROLE_ADMIN)) {
+                log.info("Admin account already present, bootstrap is a no-op: {}", email);
+                return;
+            }
+
+            Set<Role> roles = new HashSet<>(admin.getRoles());
+            roles.add(Role.ROLE_ADMIN);
+            admin.setRoles(roles);
+
+            sendUserUpdatedEvent(userRepository.save(admin));
+            log.info("Granted ROLE_ADMIN to existing account: {}", email);
+            return;
+        }
+
+        User admin = User.builder()
+                .email(email)
+                .password(passwordEncoder.encode(password))
+                .firstName(firstName)
+                .lastName(lastName)
+                .roles(Set.of(Role.ROLE_ADMIN))
+                .isActive(true)
+                .build();
+
+        sendUserCreatedEvent(userRepository.save(admin));
+        log.info("Admin account created: {}", email);
     }
 
     /**

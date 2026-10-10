@@ -203,6 +203,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: auth
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
     depends_on:
       postgres:

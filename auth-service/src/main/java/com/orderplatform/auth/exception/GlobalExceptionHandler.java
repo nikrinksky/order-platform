@@ -6,6 +6,7 @@ package com.orderplatform.auth.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -36,6 +37,23 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         return ResponseEntity.badRequest().body(errors);
+    }
+
+    /**
+     * Handles authorization failures raised by method security ({@code @PreAuthorize}).
+     *
+     * <p>{@code AccessDeniedException} is a {@link RuntimeException}, so without this handler the
+     * generic one below would answer {@code 409 Conflict} for a request that was actually
+     * forbidden.
+     *
+     * @param ex the access denied exception
+     * @return a map with error message and HTTP 403 status
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Forbidden");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
     /**

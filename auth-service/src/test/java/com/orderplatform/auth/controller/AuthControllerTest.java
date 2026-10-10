@@ -18,7 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -199,6 +201,44 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/test"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Auth service is working!"));
+    }
+
+    @Test
+    void testUpdateRoles_Success() throws Exception {
+        when(userService.updateRoles(eq("123"), anySet())).thenReturn(sampleUserDto());
+
+        mockMvc.perform(put("/api/auth/users/123/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\":[\"ROLE_ADMIN\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("test@example.com"));
+    }
+
+    @Test
+    void testUpdateRoles_UnknownRole_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(put("/api/auth/users/123/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\":[\"ROLE_SUPERHERO\"]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testUpdateRoles_EmptyRoles_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(put("/api/auth/users/123/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testUpdateRoles_UserNotFound_ReturnsNotFound() throws Exception {
+        when(userService.updateRoles(eq("999"), anySet()))
+                .thenThrow(new RuntimeException("User not found with id: 999"));
+
+        mockMvc.perform(put("/api/auth/users/999/roles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\":[\"ROLE_ADMIN\"]}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
