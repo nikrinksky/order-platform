@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,6 +26,7 @@ class UserRepositoryTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder()
+                .id(UUID.randomUUID().toString())
                 .username("testuser")
                 .email("test@example.com")
                 .firstName("Test")
@@ -60,6 +62,7 @@ class UserRepositoryTest {
         userRepository.save(testUser);
 
         User anotherUser = User.builder()
+                .id(UUID.randomUUID().toString())
                 .username("anotheruser")
                 .email("another@example.com")
                 .firstName("Another")

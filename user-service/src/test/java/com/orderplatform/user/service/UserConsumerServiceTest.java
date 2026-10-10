@@ -91,10 +91,10 @@ class UserConsumerServiceTest {
         when(userRepository.existsByEmail(testEvent.getEmail())).thenReturn(false);
         when(userRepository.save(any(User.class))).thenThrow(new RuntimeException("DB Error"));
 
-        // When
-        assertDoesNotThrow(() -> userConsumerService.consumeUserCreated(testEvent));
+        // When / Then - the failure must reach the Kafka listener container so the record is
+        // retried; swallowing it would commit the offset and lose the user silently.
+        assertThrows(RuntimeException.class, () -> userConsumerService.consumeUserCreated(testEvent));
 
-        // Then - exception should be caught and logged
         verify(userRepository, times(1)).existsByEmail(testEvent.getEmail());
         verify(userRepository, times(1)).save(any(User.class));
     }
@@ -257,10 +257,10 @@ class UserConsumerServiceTest {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        // When
-        assertDoesNotThrow(() -> userConsumerService.consumeUserUpdated(updatedEvent));
+        // When / Then - the failure must reach the Kafka listener container so the record is
+        // retried instead of being dropped.
+        assertThrows(RuntimeException.class, () -> userConsumerService.consumeUserUpdated(updatedEvent));
 
-        // Then - exception should be caught and logged
         verify(userRepository, times(1)).findById("test-user-id");
         verify(userRepository, never()).save(any(User.class));
     }
