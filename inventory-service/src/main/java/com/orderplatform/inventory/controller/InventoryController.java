@@ -4,9 +4,13 @@ import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.service.InventoryService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -14,6 +18,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/inventory")
 @RequiredArgsConstructor
+@Validated
 public class InventoryController {
 
     private final InventoryService inventoryService;
@@ -25,8 +30,12 @@ public class InventoryController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Reserves stock for an order. Callable by an administrator or a manager only - it used to be
+     * open to anonymous callers, which let anyone take stock out of circulation.
+     */
     @PostMapping("/reserve")
-    public ResponseEntity<ReservationResponse> reserve(@RequestBody ReservationRequest request) {
+    public ResponseEntity<ReservationResponse> reserve(@Valid @RequestBody ReservationRequest request) {
         return ResponseEntity.ok(inventoryService.reserve(request));
     }
 
@@ -34,15 +43,19 @@ public class InventoryController {
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<InventoryItem> createInventoryItem(
             @RequestParam("productId") String productId,
-            @RequestParam("quantity") Integer quantity) {
+            @RequestParam("quantity") @PositiveOrZero(message = "quantity must not be negative") Integer quantity) {
         return ResponseEntity.ok(inventoryService.createOrUpdate(productId, quantity));
     }
 
+    /**
+     * Releases a reservation. Callable by an administrator or a manager only - it used to be open
+     * to anonymous callers.
+     */
     @PostMapping("/release")
     public ResponseEntity<ReservationResponse> release(
             @RequestParam String orderId,
             @RequestParam String productId,
-            @RequestParam Integer quantity) {
+            @RequestParam @Positive(message = "quantity must be greater than zero") Integer quantity) {
         return ResponseEntity.ok(inventoryService.release(orderId, productId, quantity));
     }
 
@@ -50,7 +63,7 @@ public class InventoryController {
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<Void> updateQuantity(
             @PathVariable("productId") String productId,
-            @RequestParam Integer quantity) {
+            @RequestParam @PositiveOrZero(message = "quantity must not be negative") Integer quantity) {
         inventoryService.updateQuantity(productId, quantity);
         return ResponseEntity.ok().build();
     }

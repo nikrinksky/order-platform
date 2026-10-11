@@ -95,6 +95,27 @@ class InventoryControllerTest {
     }
 
     @Test
+    void shouldRejectReserveWithZeroQuantity() throws Exception {
+        String json = """
+                {"orderId": "order-1", "productId": "prod-1", "quantity": 0}
+                """;
+
+        mockMvc.perform(post("/api/inventory/reserve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectReleaseWithZeroQuantity() throws Exception {
+        mockMvc.perform(post("/api/inventory/release")
+                        .param("orderId", "order-1")
+                        .param("productId", "prod-1")
+                        .param("quantity", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void shouldCreateInventoryItem() throws Exception {
         InventoryItem item = InventoryItem.builder()
                 .id("1")

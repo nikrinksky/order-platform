@@ -33,19 +33,10 @@ public class InventoryService {
 
     @Transactional
     public ReservationResponse reserve(ReservationRequest request) {
-        InventoryItem item = inventoryItemRepository.findByProductId(request.getProductId())
-                .orElseGet(() -> {
-                    InventoryItem newItem = InventoryItem.builder()
-                            .id(java.util.UUID.randomUUID().toString())
-                            .productId(request.getProductId())
-                            .quantity(0)
-                            .reserved(0)
-                            .available(false)
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build();
-                    return inventoryItemRepository.save(newItem);
-                });
+        requirePositive(request.getQuantity(), "Reservation quantity");
+
+        InventoryItem item = inventoryItemRepository.findByProductIdForUpdate(request.getProductId())
+                .orElseGet(() -> createEmptyItem(request.getProductId()));
 
         int availableQuantity = item.getQuantity() - item.getReserved();
         if (availableQuantity >= request.getQuantity()) {
@@ -86,7 +77,9 @@ public class InventoryService {
 
     @Transactional
     public ReservationResponse release(String orderId, String productId, Integer quantity) {
-        InventoryItem item = inventoryItemRepository.findByProductId(productId)
+        requirePositive(quantity, "Release quantity");
+
+        InventoryItem item = inventoryItemRepository.findByProductIdForUpdate(productId)
                 .orElseThrow(() -> new RuntimeException("Inventory item not found for product: " + productId));
 
         item.setReserved(Math.max(0, item.getReserved() - quantity));
@@ -114,19 +107,10 @@ public class InventoryService {
 
     @Transactional
     public InventoryItem createOrUpdate(String productId, Integer quantity) {
-        InventoryItem item = inventoryItemRepository.findByProductId(productId)
-                .orElseGet(() -> {
-                    InventoryItem newItem = InventoryItem.builder()
-                            .id(java.util.UUID.randomUUID().toString())
-                            .productId(productId)
-                            .quantity(0)
-                            .reserved(0)
-                            .available(false)
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build();
-                    return inventoryItemRepository.save(newItem);
-                });
+        requireNotNegative(quantity, "Stock quantity");
+
+        InventoryItem item = inventoryItemRepository.findByProductIdForUpdate(productId)
+                .orElseGet(() -> createEmptyItem(productId));
 
         item.setQuantity(quantity);
         item.setAvailable(quantity > 0);
@@ -139,23 +123,50 @@ public class InventoryService {
 
     @Transactional
     public void updateQuantity(String productId, Integer quantity) {
-        InventoryItem item = inventoryItemRepository.findByProductId(productId)
-                .orElseGet(() -> {
-                    InventoryItem newItem = InventoryItem.builder()
-                            .id(java.util.UUID.randomUUID().toString())
-                            .productId(productId)
-                            .quantity(quantity)
-                            .reserved(0)
-                            .available(quantity > 0)
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build();
-                    return inventoryItemRepository.save(newItem);
-                });
+        requireNotNegative(quantity, "Stock quantity");
+
+        InventoryItem item = inventoryItemRepository.findByProductIdForUpdate(productId)
+                .orElseGet(() -> createEmptyItem(productId));
 
         item.setQuantity(quantity);
         item.setAvailable(quantity > 0);
         item.setUpdatedAt(LocalDateTime.now());
         inventoryItemRepository.save(item);
+    }
+
+    /**
+     * Builds the placeholder row used when a product has no stock record yet. It is inserted
+     * before the read-modify-write continues, so the row exists for the pessimistic lock of
+     * every concurrent request to serialise on.
+     */
+    private InventoryItem createEmptyItem(String productId) {
+        return inventoryItemRepository.save(InventoryItem.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .productId(productId)
+                .quantity(0)
+                .reserved(0)
+                .available(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build());
+    }
+
+    /**
+     * Rejects a non-positive reservation or release amount.
+     *
+     * <p>Without this a negative amount inverted the arithmetic: reserving -1000 turned the
+     * reserved counter negative, and a following reservation of 500 passed against a stock of 1.
+     */
+    private static void requirePositive(Integer quantity, String what) {
+        if (quantity == null || quantity <= 0) {
+            throw new IllegalArgumentException(what + " must be greater than zero");
+        }
+    }
+
+    /** Rejects a negative stock amount; zero is a valid "out of stock" value. */
+    private static void requireNotNegative(Integer quantity, String what) {
+        if (quantity == null || quantity < 0) {
+            throw new IllegalArgumentException(what + " must not be negative");
+        }
     }
 }
