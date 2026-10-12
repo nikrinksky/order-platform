@@ -16,9 +16,9 @@ import com.orderplatform.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -124,7 +124,8 @@ public class OrderService {
 
     @Transactional
     public OrderResponse reserveOrder(String orderId) {
-        Order order = orderRepository.findById(orderId)
+        // Locked read: a concurrent or repeated reserve must not reserve the same stock twice
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
 
         // Validate: only NEW -> RESERVED or CANCELLED
@@ -172,7 +173,8 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateStatus(String orderId, OrderStatus status) {
-        Order order = orderRepository.findById(orderId)
+        // Locked read: a status change racing with a cancellation must not both be applied
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
 
         // Validate state transition
@@ -191,14 +193,23 @@ public class OrderService {
         order = orderRepository.save(order);
         log.info("Order {} status updated from {} to {}", orderId, previousStatus, status);
 
-        // Compensation: cancelling a RESERVED order must release reserved stock
-        if (status == OrderStatus.CANCELLED && previousStatus == OrderStatus.RESERVED) {
+        // Compensation: cancelling an order that still holds a reservation must release the stock.
+        // The reservation is held from RESERVED until the goods leave the warehouse (SHIPPED), so
+        // a cancellation from PAID or SHIPPED leaks stock unless it is released here too.
+        if (status == OrderStatus.CANCELLED && holdsReservation(previousStatus)) {
             releaseReservations(orderId, order.getItems());
         }
 
         appendStatusChanged(order, status);
 
         return OrderResponse.from(order);
+    }
+
+    /** Whether an order in this status still holds stock reserved in inventory. */
+    private static boolean holdsReservation(OrderStatus status) {
+        return status == OrderStatus.RESERVED
+                || status == OrderStatus.PAID
+                || status == OrderStatus.SHIPPED;
     }
 
     public OrderResponse findById(String orderId) {
@@ -229,22 +240,31 @@ public class OrderService {
         }
     }
 
+    /**
+     * Reads the price of a product from the catalogue.
+     *
+     * <p>An order is a money document, so an unknown or unpriced product is rejected instead of
+     * being silently priced at zero: the old fallback created orders for products that do not
+     * exist and made them look free.
+     *
+     * @param productId product id
+     * @return the catalogue price
+     * @throws IllegalArgumentException if the product is unknown or has no price
+     */
     private BigDecimal fetchProductPrice(String productId) {
+        String url = productServiceUrl + "/api/products/" + productId;
+        Map<?, ?> product;
         try {
-            String url = productServiceUrl + "/api/products/" + productId;
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Object price = response.getBody().get("price");
-                if (price != null) {
-                    return new BigDecimal(price.toString());
-                }
-            }
-            log.warn("Product {} not found, using zero price", productId);
-            return BigDecimal.ZERO;
-        } catch (Exception e) {
-            log.error("Failed to fetch price for product {}: {}", productId, e.getMessage());
-            return BigDecimal.ZERO;
+            product = restTemplate.getForObject(url, Map.class);
+        } catch (HttpStatusCodeException e) {
+            // 404, or a hidden product that the catalogue refuses to show
+            throw new IllegalArgumentException("Unknown product: " + productId, e);
         }
+        Object price = product == null ? null : product.get("price");
+        if (price == null) {
+            throw new IllegalArgumentException("Product " + productId + " has no price");
+        }
+        return new BigDecimal(price.toString());
     }
 
     /**

@@ -2,6 +2,8 @@ package com.orderplatform.order.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -47,6 +49,38 @@ public class GlobalExceptionHandler {
                 "message", ex.getMessage()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    /**
+     * Two requests changed the same order at once and the optimistic-lock counter caught the
+     * second one. Reported as a conflict so the caller can re-read the order and retry.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException ex) {
+        Map<String, Object> body = Map.of(
+                "timestamp", LocalDateTime.now().toString(),
+                "status", HttpStatus.CONFLICT.value(),
+                "error", "Conflict",
+                "message", "The order was modified concurrently, please retry"
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    /**
+     * A downstream service (catalogue, inventory) could not be reached. This is not a client
+     * error, so it must not be reported as 404 like the generic runtime exception handler does.
+     */
+    @ExceptionHandler(RestClientException.class)
+    public ResponseEntity<Map<String, Object>> handleDownstreamUnavailable(
+            RestClientException ex) {
+        Map<String, Object> body = Map.of(
+                "timestamp", LocalDateTime.now().toString(),
+                "status", HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "error", "Service Unavailable",
+                "message", "A required downstream service is unavailable"
+        );
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
     }
 
     @ExceptionHandler(RuntimeException.class)

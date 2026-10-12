@@ -16,8 +16,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -114,8 +116,8 @@ class OrderServiceTest {
     @Test
     void createOrder_shouldReturnCreatedOrder() {
         when(inventoryClient.hasStock(eq("product-1"), eq(2))).thenReturn(true);
-        when(restTemplate.getForEntity(anyString(), eq(Map.class)))
-                .thenReturn(ResponseEntity.ok(Map.of("price", "10.00")));
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.createOrder(sampleRequest());
@@ -178,8 +180,8 @@ class OrderServiceTest {
         request.setIdempotencyKey("key-1");
         when(idempotencyKeyRepository.findByKey("key-1")).thenReturn(Optional.empty());
         when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
-        when(restTemplate.getForEntity(anyString(), eq(Map.class)))
-                .thenReturn(ResponseEntity.ok(Map.of("price", "10.00")));
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         orderService.createOrder(request);
@@ -219,7 +221,7 @@ class OrderServiceTest {
     @Test
     void reserveOrder_shouldReserveWhenInventoryAvailable() {
         Order order = sampleOrder();
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(eq("product-1"), eq(2), eq("order-1"))).thenReturn(true);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -232,7 +234,7 @@ class OrderServiceTest {
     @Test
     void reserveOrder_shouldCancelWhenInventoryUnavailable() {
         Order order = sampleOrder();
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(anyString(), anyInt(), anyString())).thenReturn(false);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -242,8 +244,59 @@ class OrderServiceTest {
     }
 
     @Test
+    void createOrder_shouldRejectUnknownProduct() {
+        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenThrow(new HttpClientErrorException(HttpStatus.NOT_FOUND));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrder(sampleRequest()));
+
+        assertTrue(ex.getMessage().contains("Unknown product"));
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_shouldRejectProductWithoutPrice() {
+        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("productId", "product-1"));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrder(sampleRequest()));
+
+        assertTrue(ex.getMessage().contains("has no price"));
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_shouldNotCreateFreeOrderForUnavailableCatalogue() {
+        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("connection refused"));
+
+        // The catalogue being down is not a client error; it must surface, not be priced at zero
+        assertThrows(ResourceAccessException.class, () -> orderService.createOrder(sampleRequest()));
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void reserveOrder_shouldReadOrderUnderLock() {
+        Order order = sampleOrder();
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(inventoryClient.reserve(eq("product-1"), eq(2), eq("order-1"))).thenReturn(true);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderService.reserveOrder("order-1");
+
+        // The locked read is what stops two concurrent reserves from reserving twice
+        verify(orderRepository).findByIdForUpdate("order-1");
+        verify(orderRepository, never()).findById("order-1");
+    }
+
+    @Test
     void reserveOrder_shouldThrowWhenOrderNotFound() {
-        when(orderRepository.findById("999")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate("999")).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> orderService.reserveOrder("999"));
     }
@@ -252,7 +305,7 @@ class OrderServiceTest {
     void reserveOrder_shouldThrowWhenNotNewStatus() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.RESERVED);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
 
         assertThrows(IllegalArgumentException.class, () -> orderService.reserveOrder("order-1"));
         verify(orderRepository, never()).save(any(Order.class));
@@ -262,7 +315,7 @@ class OrderServiceTest {
     void reserveOrder_shouldReleaseReservedItemsOnPartialFailure() {
         Order order = twoItemOrder();
 
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(eq("product-1"), anyInt(), anyString())).thenReturn(true);
         when(inventoryClient.reserve(eq("product-2"), anyInt(), anyString())).thenReturn(false);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -292,7 +345,7 @@ class OrderServiceTest {
                 ))
                 .build();
 
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(eq("product-1"), anyInt(), anyString())).thenReturn(true);
         when(inventoryClient.reserve(eq("product-2"), anyInt(), anyString())).thenReturn(true);
         when(inventoryClient.reserve(eq("product-3"), anyInt(), anyString())).thenReturn(false);
@@ -310,7 +363,7 @@ class OrderServiceTest {
     void reserveOrder_shouldCancelWhenCompensationFails() {
         Order order = twoItemOrder();
 
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(eq("product-1"), anyInt(), anyString())).thenReturn(true);
         when(inventoryClient.reserve(eq("product-2"), anyInt(), anyString())).thenReturn(false);
         doThrow(new IllegalStateException("inventory-service unavailable"))
@@ -327,7 +380,7 @@ class OrderServiceTest {
     void reserveOrder_shouldCompensateWhenReserveThrows() {
         Order order = twoItemOrder();
 
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(inventoryClient.reserve(eq("product-1"), anyInt(), anyString())).thenReturn(true);
         when(inventoryClient.reserve(eq("product-2"), anyInt(), anyString()))
                 .thenThrow(new IllegalStateException("inventory-service unavailable"));
@@ -344,7 +397,7 @@ class OrderServiceTest {
     void updateStatus_shouldReleaseReservationsWhenReservedOrderCancelled() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.RESERVED);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED);
@@ -356,7 +409,7 @@ class OrderServiceTest {
     @Test
     void updateStatus_shouldNotReleaseWhenNewOrderCancelled() {
         Order order = sampleOrder();
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED);
@@ -369,7 +422,7 @@ class OrderServiceTest {
     void updateStatus_shouldUpdateToPaid() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.RESERVED);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.PAID);
@@ -382,7 +435,7 @@ class OrderServiceTest {
     void updateStatus_shouldUpdateToShipped() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.PAID);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.SHIPPED);
@@ -392,9 +445,49 @@ class OrderServiceTest {
     }
 
     @Test
+    void updateStatus_shouldReleaseReservationsWhenPaidOrderCancelled() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.PAID);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED);
+
+        assertEquals("CANCELLED", response.getStatus());
+        // The stock is still reserved while the order is PAID, so cancelling must free it
+        verify(inventoryClient).release("product-1", 2, "order-1");
+    }
+
+    @Test
+    void updateStatus_shouldReleaseReservationsWhenShippedOrderCancelled() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.SHIPPED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED);
+
+        assertEquals("CANCELLED", response.getStatus());
+        verify(inventoryClient).release("product-1", 2, "order-1");
+    }
+
+    @Test
+    void updateStatus_shouldReadOrderUnderLock() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.RESERVED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderService.updateStatus("order-1", Order.OrderStatus.PAID);
+
+        verify(orderRepository).findByIdForUpdate("order-1");
+        verify(orderRepository, never()).findById("order-1");
+    }
+
+    @Test
     void updateStatus_shouldRejectSkippedState() {
         Order order = sampleOrder();
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
 
         assertThrows(IllegalArgumentException.class,
                 () -> orderService.updateStatus("order-1", Order.OrderStatus.SHIPPED));
@@ -405,7 +498,7 @@ class OrderServiceTest {
     void updateStatus_shouldRejectTransitionFromTerminalState() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.COMPLETED);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
 
         assertThrows(IllegalArgumentException.class,
                 () -> orderService.updateStatus("order-1", Order.OrderStatus.NEW));
@@ -413,7 +506,7 @@ class OrderServiceTest {
 
     @Test
     void updateStatus_shouldThrowWhenNotFound() {
-        when(orderRepository.findById("999")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate("999")).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class,
                 () -> orderService.updateStatus("999", Order.OrderStatus.PAID));
