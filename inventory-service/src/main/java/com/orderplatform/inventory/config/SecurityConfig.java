@@ -28,8 +28,12 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
+                        // Reservation endpoints used to be permitAll, so anyone could take stock
+                        // out of circulation (or release someone else's reservation). They are
+                        // called by order-service on behalf of an administrator or a manager,
+                        // which relays the caller's token.
                         .requestMatchers(HttpMethod.POST, "/api/inventory/reserve",
-                                "/api/inventory/release").permitAll()
+                                "/api/inventory/release").hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/inventory/product/**").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -8,6 +8,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+    # The main configuration pins the PostgreSQL dialect; on the in-memory H2 database it made
+    # Hibernate emit PostgreSQL-only locking syntax ("for no key update") that H2 rejects.
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
   kafka:
     enabled: false
 logging:

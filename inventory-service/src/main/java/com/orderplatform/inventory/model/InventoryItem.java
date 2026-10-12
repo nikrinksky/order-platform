@@ -31,6 +31,13 @@ public class InventoryItem {
     @Column(nullable = false)
     private Boolean available;
 
+    /**
+     * Optimistic-lock counter. Guards against a lost update when the row is modified outside the
+     * pessimistic lock (for example two stock updates racing after the same read).
+     */
+    @Version
+    private Long version;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

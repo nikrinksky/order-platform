@@ -51,7 +51,7 @@ class InventoryServiceTest {
                 .build();
 
         InventoryItem item = sampleItem();
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReservationResponse response = inventoryService.reserve(request);
@@ -67,6 +67,52 @@ class InventoryServiceTest {
                 any(com.orderplatform.events.inventory.InventoryReservedEvent.class));
     }
 
+    /**
+     * The row must be read under a pessimistic lock. Without it two concurrent reservations read
+     * the same free quantity and both pass, which is exactly the oversell defect.
+     */
+    @Test
+    void reserve_shouldReadItemUnderLock() {
+        ReservationRequest request = ReservationRequest.builder()
+                .orderId("order-1")
+                .productId("product-1")
+                .quantity(5)
+                .build();
+
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1"))
+                .thenReturn(Optional.of(sampleItem()));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        inventoryService.reserve(request);
+
+        verify(inventoryItemRepository).findByProductIdForUpdate("product-1");
+        verify(inventoryItemRepository, never()).findByProductId("product-1");
+    }
+
+    @Test
+    void reserve_shouldRejectZeroQuantity() {
+        ReservationRequest request = ReservationRequest.builder()
+                .orderId("order-1")
+                .productId("product-1")
+                .quantity(0)
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.reserve(request));
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
+    @Test
+    void reserve_shouldRejectNegativeQuantity() {
+        ReservationRequest request = ReservationRequest.builder()
+                .orderId("order-1")
+                .productId("product-1")
+                .quantity(-5)
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.reserve(request));
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
     @Test
     void reserve_shouldNotAppendEventWhenInsufficient() {
         ReservationRequest request = ReservationRequest.builder()
@@ -76,7 +122,7 @@ class InventoryServiceTest {
                 .build();
 
         InventoryItem item = sampleItem();
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
 
         inventoryService.reserve(request);
 
@@ -92,7 +138,7 @@ class InventoryServiceTest {
                 .build();
 
         InventoryItem item = sampleItem();
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
 
         ReservationResponse response = inventoryService.reserve(request);
 
@@ -109,7 +155,7 @@ class InventoryServiceTest {
                 .quantity(5)
                 .build();
 
-        when(inventoryItemRepository.findByProductId("new-product")).thenReturn(Optional.empty());
+        when(inventoryItemRepository.findByProductIdForUpdate("new-product")).thenReturn(Optional.empty());
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReservationResponse response = inventoryService.reserve(request);
@@ -139,7 +185,7 @@ class InventoryServiceTest {
     void release_shouldDecreaseReservedQuantity() {
         InventoryItem item = sampleItem();
         item.setReserved(10);
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReservationResponse response = inventoryService.release("order-1", "product-1", 4);
@@ -153,7 +199,7 @@ class InventoryServiceTest {
     void release_shouldNotGoBelowZero() {
         InventoryItem item = sampleItem();
         item.setReserved(2);
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         inventoryService.release("order-1", "product-1", 10);
@@ -162,15 +208,24 @@ class InventoryServiceTest {
     }
 
     @Test
+    void release_shouldRejectNonPositiveQuantity() {
+        assertThrows(IllegalArgumentException.class,
+                () -> inventoryService.release("order-1", "product-1", 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> inventoryService.release("order-1", "product-1", -3));
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
+    @Test
     void release_shouldThrowWhenItemNotFound() {
-        when(inventoryItemRepository.findByProductId("nonexistent")).thenReturn(Optional.empty());
+        when(inventoryItemRepository.findByProductIdForUpdate("nonexistent")).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> inventoryService.release("order-1", "nonexistent", 5));
     }
 
     @Test
     void createOrUpdate_shouldCreateNewItem() {
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.empty());
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.empty());
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         InventoryItem item = inventoryService.createOrUpdate("product-1", 100);
@@ -184,7 +239,7 @@ class InventoryServiceTest {
     @Test
     void createOrUpdate_shouldUpdateExistingItem() {
         InventoryItem item = sampleItem();
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         InventoryItem updated = inventoryService.createOrUpdate("product-1", 0);
@@ -194,9 +249,15 @@ class InventoryServiceTest {
     }
 
     @Test
+    void createOrUpdate_shouldRejectNegativeQuantity() {
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.createOrUpdate("product-1", -1));
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
+    @Test
     void updateQuantity_shouldUpdateExistingItem() {
         InventoryItem item = sampleItem();
-        when(inventoryItemRepository.findByProductId("product-1")).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.findByProductIdForUpdate("product-1")).thenReturn(Optional.of(item));
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         inventoryService.updateQuantity("product-1", 150);
@@ -208,7 +269,7 @@ class InventoryServiceTest {
 
     @Test
     void updateQuantity_shouldCreateNewItemWhenNotFound() {
-        when(inventoryItemRepository.findByProductId("new-product")).thenReturn(Optional.empty());
+        when(inventoryItemRepository.findByProductIdForUpdate("new-product")).thenReturn(Optional.empty());
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         inventoryService.updateQuantity("new-product", 42);
@@ -219,5 +280,11 @@ class InventoryServiceTest {
         assertEquals("new-product", created.getProductId());
         assertEquals(42, created.getQuantity());
         assertTrue(created.getAvailable());
+    }
+
+    @Test
+    void updateQuantity_shouldRejectNegativeQuantity() {
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.updateQuantity("product-1", -10));
+        verifyNoInteractions(inventoryItemRepository);
     }
 }
