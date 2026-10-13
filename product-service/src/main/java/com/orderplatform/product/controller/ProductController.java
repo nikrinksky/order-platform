@@ -4,10 +4,16 @@ import com.orderplatform.product.dto.ProductRequest;
 import com.orderplatform.product.dto.ProductResponse;
 import com.orderplatform.product.service.ProductService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -16,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
+@Validated
 public class ProductController {
 
     private final ProductService productService;
@@ -27,8 +34,9 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> getAllProducts(
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
+            @RequestParam(value = "page", defaultValue = "0") @Min(value = 0, message = "page must not be negative") int page,
+            @RequestParam(value = "size", defaultValue = "20") @Min(value = 1, message = "size must be at least 1")
+            @Max(value = 100, message = "size must not exceed 100") int size) {
         return ResponseEntity.ok(productService.findAll(page, size));
     }
 
@@ -40,23 +48,26 @@ public class ProductController {
     @GetMapping("/category/{category}")
     public ResponseEntity<Page<ProductResponse>> getByCategory(
             @PathVariable("category") String category,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
+            @RequestParam(value = "page", defaultValue = "0") @Min(value = 0, message = "page must not be negative") int page,
+            @RequestParam(value = "size", defaultValue = "20") @Min(value = 1, message = "size must be at least 1")
+            @Max(value = 100, message = "size must not exceed 100") int size) {
         return ResponseEntity.ok(productService.findByCategory(category, page, size));
     }
 
     @GetMapping("/search")
     public ResponseEntity<Page<ProductResponse>> searchByText(
-            @RequestParam String text,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
+            @RequestParam @NotBlank(message = "text must not be blank")
+            @Size(max = 100, message = "text must not exceed 100 characters") String text,
+            @RequestParam(value = "page", defaultValue = "0") @Min(value = 0, message = "page must not be negative") int page,
+            @RequestParam(value = "size", defaultValue = "20") @Min(value = 1, message = "size must be at least 1")
+            @Max(value = 100, message = "size must not exceed 100") int size) {
         return ResponseEntity.ok(productService.searchByText(text, page, size));
     }
 
     @GetMapping("/price-range")
     public ResponseEntity<List<ProductResponse>> getByPriceRange(
-            @RequestParam BigDecimal minPrice,
-            @RequestParam BigDecimal maxPrice) {
+            @RequestParam @DecimalMin(value = "0.0", message = "minPrice must not be negative") BigDecimal minPrice,
+            @RequestParam @DecimalMin(value = "0.0", message = "maxPrice must not be negative") BigDecimal maxPrice) {
         return ResponseEntity.ok(productService.findByPriceRange(minPrice, maxPrice));
     }
 

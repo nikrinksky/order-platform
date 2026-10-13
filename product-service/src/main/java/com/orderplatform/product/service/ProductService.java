@@ -4,6 +4,7 @@ import com.orderplatform.product.dto.ProductRequest;
 import com.orderplatform.product.dto.ProductResponse;
 import com.orderplatform.product.model.Product;
 import com.orderplatform.product.repository.ProductRepository;
+import com.orderplatform.product.security.CatalogAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,17 +21,38 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductService {
 
-    private final ProductRepository productRepository;
+    /**
+     * Characters that carry a meaning inside a regular expression. A user supplied search string
+     * containing one of them must be escaped before it reaches MongoDB.
+     */
+    private static final String REGEX_METACHARACTERS = "\\^$.|?*+()[]{}";
 
+    private final ProductRepository productRepository;
+    private final CatalogAccess catalogAccess;
+
+    /**
+     * Returns a product by id.
+     *
+     * <p>A hidden product is reported as missing unless the caller may see hidden products: the
+     * endpoint is public, so without this an unpublished product was readable by anyone who knew
+     * its id.
+     */
     public ProductResponse findById(String id) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
+                .orElseThrow(() -> notFound(id));
+        if (!product.isActive() && !catalogAccess.canViewHiddenProducts()) {
+            throw notFound(id);
+        }
         return toResponse(product);
     }
 
+    /** Lists the catalogue: the published products for a visitor, everything for a privileged caller. */
     public Page<ProductResponse> findAll(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return productRepository.findAll(pageable).map(this::toResponse);
+        Page<Product> products = catalogAccess.canViewHiddenProducts()
+                ? productRepository.findAll(pageable)
+                : productRepository.findByActive(true, pageable);
+        return products.map(this::toResponse);
     }
 
     public List<ProductResponse> findByActive(boolean active) {
@@ -41,18 +63,52 @@ public class ProductService {
 
     public Page<ProductResponse> findByCategory(String category, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return productRepository.findByCategory(category, pageable).map(this::toResponse);
+        Page<Product> products = catalogAccess.canViewHiddenProducts()
+                ? productRepository.findByCategory(category, pageable)
+                : productRepository.findByCategoryAndActive(category, true, pageable);
+        return products.map(this::toResponse);
     }
 
     public Page<ProductResponse> searchByText(String text, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return productRepository.searchByText(text, pageable).map(this::toResponse);
+        // The user string is a literal to search for, not a regular expression: escape it so that
+        // ".*" or a nested quantifier cannot be used to dump or stall the collection.
+        String escaped = escapeRegex(text);
+        Page<Product> products = catalogAccess.canViewHiddenProducts()
+                ? productRepository.searchByText(escaped, pageable)
+                : productRepository.searchActiveByText(escaped, pageable);
+        return products.map(this::toResponse);
     }
 
     public List<ProductResponse> findByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        return productRepository.findByPriceRange(minPrice, maxPrice).stream()
+        List<Product> products = catalogAccess.canViewHiddenProducts()
+                ? productRepository.findByPriceRangeIncludingHidden(minPrice, maxPrice)
+                : productRepository.findByPriceRange(minPrice, maxPrice);
+        return products.stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    /**
+     * Turns a user supplied search string into a literal regular expression: every character that
+     * has a special meaning in a regex is prefixed with a backslash.
+     *
+     * @param text raw search text
+     * @return the escaped text, safe to use as a {@code $regex} operand
+     */
+    static String escapeRegex(String text) {
+        StringBuilder escaped = new StringBuilder(text.length() * 2);
+        for (char c : text.toCharArray()) {
+            if (REGEX_METACHARACTERS.indexOf(c) >= 0) {
+                escaped.append('\\');
+            }
+            escaped.append(c);
+        }
+        return escaped.toString();
+    }
+
+    private static RuntimeException notFound(String id) {
+        return new RuntimeException("Product not found with id: " + id);
     }
 
     @Transactional
@@ -75,7 +131,7 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(String id, ProductRequest request) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
+                .orElseThrow(() -> notFound(id));
 
         product.setName(request.getName());
         product.setDescription(request.getDescription());
@@ -91,7 +147,7 @@ public class ProductService {
     @Transactional
     public void deleteProduct(String id) {
         if (!productRepository.existsById(id)) {
-            throw new RuntimeException("Product not found with id: " + id);
+            throw notFound(id);
         }
         productRepository.deleteById(id);
     }
@@ -99,7 +155,7 @@ public class ProductService {
     @Transactional
     public ProductResponse toggleActive(String id) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
+                .orElseThrow(() -> notFound(id));
 
         product.setActive(!product.isActive());
         product.setUpdatedAt(LocalDateTime.now());
