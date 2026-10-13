@@ -21,6 +21,8 @@ public class ProductRequest {
 
     @NotNull(message = "Price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Price must be positive")
+    @Digits(integer = 17, fraction = 2,
+            message = "Price must be a number with at most 2 fraction digits")
     private BigDecimal price;
 
     private String category;

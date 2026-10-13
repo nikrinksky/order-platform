@@ -28,6 +28,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
+                        // The catalogue is readable without a token, so a URL rule cannot express
+                        // visibility: the service itself hides unpublished products from anyone
+                        // who is not an administrator or a manager (see CatalogAccess).
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         .anyRequest().authenticated()
                 )

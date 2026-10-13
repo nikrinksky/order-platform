@@ -4,6 +4,7 @@ import com.orderplatform.product.dto.ProductRequest;
 import com.orderplatform.product.dto.ProductResponse;
 import com.orderplatform.product.model.Product;
 import com.orderplatform.product.repository.ProductRepository;
+import com.orderplatform.product.security.CatalogAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +31,10 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    /** Answers false by default, i.e. the caller is an anonymous visitor. */
+    @Mock
+    private CatalogAccess catalogAccess;
+
     @InjectMocks
     private ProductService productService;
 
@@ -43,6 +48,12 @@ class ProductServiceTest {
                 .quantity(10)
                 .active(true)
                 .build();
+    }
+
+    private Product hiddenProduct(String id, String name) {
+        Product product = sampleProduct(id, name);
+        product.setActive(false);
+        return product;
     }
 
     @Test
@@ -106,10 +117,124 @@ class ProductServiceTest {
         assertThrows(RuntimeException.class, () -> productService.findById("999"));
     }
 
+    /**
+     * The catalogue endpoint is public, so an unpublished product must look missing to a visitor
+     * even though the document exists.
+     */
+    @Test
+    void findById_shouldHideUnpublishedProductFromVisitor() {
+        when(productRepository.findById("1")).thenReturn(Optional.of(hiddenProduct("1", "Draft")));
+
+        assertThrows(RuntimeException.class, () -> productService.findById("1"));
+    }
+
+    @Test
+    void findById_shouldReturnUnpublishedProductToPrivilegedCaller() {
+        when(catalogAccess.canViewHiddenProducts()).thenReturn(true);
+        when(productRepository.findById("1")).thenReturn(Optional.of(hiddenProduct("1", "Draft")));
+
+        ProductResponse response = productService.findById("1");
+
+        assertEquals("Draft", response.getName());
+        assertFalse(response.isActive());
+    }
+
+    @Test
+    void findAll_shouldReturnOnlyPublishedProductsToVisitor() {
+        Page<Product> page = new PageImpl<>(List.of(sampleProduct("1", "P1")));
+        when(productRepository.findByActive(eq(true), any(Pageable.class))).thenReturn(page);
+
+        Page<ProductResponse> result = productService.findAll(0, 20);
+
+        assertEquals(1, result.getContent().size());
+        // A visitor must not be served the whole catalogue
+        verify(productRepository).findByActive(eq(true), any(Pageable.class));
+        verify(productRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
+    void findAll_shouldReturnWholeCatalogueToPrivilegedCaller() {
+        when(catalogAccess.canViewHiddenProducts()).thenReturn(true);
+        Page<Product> page = new PageImpl<>(List.of(sampleProduct("1", "P1"), hiddenProduct("2", "Draft")));
+        when(productRepository.findAll(any(Pageable.class))).thenReturn(page);
+
+        Page<ProductResponse> result = productService.findAll(0, 20);
+
+        assertEquals(2, result.getContent().size());
+    }
+
+    @Test
+    void searchByText_shouldEscapeRegexMetacharacters() {
+        when(productRepository.searchActiveByText(eq("\\.\\*"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.searchByText(".*", 0, 20);
+
+        // ".*" must reach MongoDB escaped, otherwise it matches every product
+        verify(productRepository).searchActiveByText(eq("\\.\\*"), any(Pageable.class));
+        verify(productRepository, never()).searchByText(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void searchByText_shouldEscapeNestedQuantifierAndBrackets() {
+        when(productRepository.searchActiveByText(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        String escapedNestedQuantifier = "\\(a\\+\\)\\+\\$";
+
+        productService.searchByText("(a+)+$", 0, 20);
+
+        verify(productRepository).searchActiveByText(eq(escapedNestedQuantifier), any(Pageable.class));
+    }
+
+    @Test
+    void searchByText_shouldKeepPlainTextUnchanged() {
+        when(productRepository.searchActiveByText(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.searchByText("phone 15", 0, 20);
+
+        verify(productRepository).searchActiveByText(eq("phone 15"), any(Pageable.class));
+    }
+
+    @Test
+    void searchByText_shouldSearchWholeCatalogueForPrivilegedCaller() {
+        when(catalogAccess.canViewHiddenProducts()).thenReturn(true);
+        when(productRepository.searchByText(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.searchByText("phone", 0, 20);
+
+        verify(productRepository).searchByText(eq("phone"), any(Pageable.class));
+        verify(productRepository, never()).searchActiveByText(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void findByPriceRange_shouldExcludeHiddenProductsFromVisitor() {
+        when(productRepository.findByPriceRange(any(BigDecimal.class), any(BigDecimal.class)))
+                .thenReturn(List.of(sampleProduct("1", "P1")));
+
+        productService.findByPriceRange(new BigDecimal("10"), new BigDecimal("100"));
+
+        verify(productRepository).findByPriceRange(any(BigDecimal.class), any(BigDecimal.class));
+        verify(productRepository, never())
+                .findByPriceRangeIncludingHidden(any(BigDecimal.class), any(BigDecimal.class));
+    }
+
+    @Test
+    void findByCategory_shouldExcludeHiddenProductsFromVisitor() {
+        when(productRepository.findByCategoryAndActive(eq("Electronics"), eq(true), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleProduct("1", "P1"))));
+
+        productService.findByCategory("Electronics", 0, 20);
+
+        verify(productRepository).findByCategoryAndActive(eq("Electronics"), eq(true), any(Pageable.class));
+        verify(productRepository, never()).findByCategory(anyString(), any(Pageable.class));
+    }
+
     @Test
     void findAll_shouldReturnPage() {
         Page<Product> page = new PageImpl<>(List.of(sampleProduct("1", "P1"), sampleProduct("2", "P2")));
-        when(productRepository.findAll(any(Pageable.class))).thenReturn(page);
+        when(productRepository.findByActive(eq(true), any(Pageable.class))).thenReturn(page);
 
         Page<ProductResponse> result = productService.findAll(0, 20);
 
@@ -130,7 +255,8 @@ class ProductServiceTest {
     @Test
     void findByCategory_shouldReturnPage() {
         Page<Product> page = new PageImpl<>(List.of(sampleProduct("1", "P1")));
-        when(productRepository.findByCategory(eq("Electronics"), any(Pageable.class))).thenReturn(page);
+        when(productRepository.findByCategoryAndActive(eq("Electronics"), eq(true), any(Pageable.class)))
+                .thenReturn(page);
 
         Page<ProductResponse> result = productService.findByCategory("Electronics", 0, 20);
 
@@ -140,7 +266,7 @@ class ProductServiceTest {
     @Test
     void searchByText_shouldReturnPage() {
         Page<Product> page = new PageImpl<>(List.of(sampleProduct("1", "P1")));
-        when(productRepository.searchByText(eq("phone"), any(Pageable.class))).thenReturn(page);
+        when(productRepository.searchActiveByText(eq("phone"), any(Pageable.class))).thenReturn(page);
 
         Page<ProductResponse> result = productService.searchByText("phone", 0, 20);
 

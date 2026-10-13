@@ -150,6 +150,53 @@ class ProductControllerTest {
     }
 
     @Test
+    void shouldRejectSearchWithBlankText() throws Exception {
+        mockMvc.perform(get("/api/products/search").param("text", " "))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectSearchWithOverlongText() throws Exception {
+        mockMvc.perform(get("/api/products/search").param("text", "a".repeat(101)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectOversizedPageSize() throws Exception {
+        mockMvc.perform(get("/api/products").param("size", "100000"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectNegativePage() throws Exception {
+        mockMvc.perform(get("/api/products").param("page", "-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectNegativePriceRange() throws Exception {
+        mockMvc.perform(get("/api/products/price-range")
+                        .param("minPrice", "-10")
+                        .param("maxPrice", "100"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectPriceWithMoreThanTwoFractionDigits() throws Exception {
+        String invalidJson = """
+                {
+                    "name": "Test",
+                    "price": 10.999
+                }
+                """;
+
+        mockMvc.perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void shouldUpdateProduct() throws Exception {
         ProductRequest request = ProductRequest.builder()
                 .name("Updated")
