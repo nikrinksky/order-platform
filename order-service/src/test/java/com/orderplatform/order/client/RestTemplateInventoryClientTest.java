@@ -47,10 +47,10 @@ class RestTemplateInventoryClientTest {
     }
 
     @Test
-    void hasStockFailsOpenWhenItemIsUnknown() {
+    void hasStockReturnsFalseWhenItemIsUnknown() {
         when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(null);
 
-        assertThat(client().hasStock("unknown", 5)).isTrue();
+        assertThat(client().hasStock("unknown", 5)).isFalse();
     }
 
     @Test
@@ -86,10 +86,10 @@ class RestTemplateInventoryClientTest {
     }
 
     @Test
-    void reserveFailsOpenWhenInventoryReturnsNoBody() {
+    void reserveReturnsFalseWhenInventoryReturnsNoBody() {
         when(restTemplate.postForObject(anyString(), any(), eq(Map.class))).thenReturn(null);
 
-        assertThat(client().reserve("p1", 5, "order-1")).isTrue();
+        assertThat(client().reserve("p1", 5, "order-1")).isFalse();
     }
 
     @Test

@@ -1,11 +1,14 @@
 package com.orderplatform.order.controller;
 
+import com.orderplatform.order.model.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.util.Map;
 
@@ -45,5 +48,24 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertTrue(((String) response.getBody().get("message")).contains("userId"));
+    }
+
+    @Test
+    void handleOptimisticLock_shouldReturnConflict() {
+        ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException(
+                Order.class, "order-1");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleOptimisticLock(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+    }
+
+    @Test
+    void handleDownstreamUnavailable_shouldReturnServiceUnavailable() {
+        ResourceAccessException ex = new ResourceAccessException("connection refused");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleDownstreamUnavailable(ex);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
     }
 }

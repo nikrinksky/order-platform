@@ -39,6 +39,14 @@ public class Order {
     @Column(nullable = false)
     private OrderStatus status;
 
+    /**
+     * Optimistic-lock counter. Two concurrent requests for the same order (a repeated reserve, a
+     * status change racing with a cancellation) must not both succeed: the second one fails with
+     * an optimistic-lock exception and is answered as a conflict.
+     */
+    @Version
+    private Long version;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

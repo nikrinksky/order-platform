@@ -41,4 +41,17 @@ public class InventoryItem {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    /**
+     * Free stock, i.e. what is left after the reservations.
+     *
+     * <p>Serialised as {@code availableQuantity} and read by order-service when it checks whether
+     * an order can be created. It is derived, never stored: without it the check had no field to
+     * read and every order passed the pre-check regardless of the actual stock.
+     *
+     * @return quantity minus reserved
+     */
+    public int getAvailableQuantity() {
+        return (quantity == null ? 0 : quantity) - (reserved == null ? 0 : reserved);
+    }
 }

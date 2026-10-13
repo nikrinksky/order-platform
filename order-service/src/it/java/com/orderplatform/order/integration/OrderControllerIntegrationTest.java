@@ -3,15 +3,23 @@ package com.orderplatform.order.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.orderplatform.order.AbstractOrderIntegrationTest;
 import com.orderplatform.order.dto.CreateOrderRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
+import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,6 +39,13 @@ class OrderControllerIntegrationTest extends AbstractOrderIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubExternalServices() {
+        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
+    }
 
     @Test
     void shouldCreateOrder() throws Exception {
@@ -59,6 +74,26 @@ class OrderControllerIntegrationTest extends AbstractOrderIntegrationTest {
         CreateOrderRequest request = CreateOrderRequest.builder()
                 .userId("test-user-empty")
                 .items(List.of())
+                .build();
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectOrderForUnknownProduct() throws Exception {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenThrow(new HttpClientErrorException(HttpStatus.NOT_FOUND));
+
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .userId("test-user-123")
+                .items(List.of(CreateOrderRequest.OrderItemRequest.builder()
+                        .productId("ghost")
+                        .productName("Ghost")
+                        .quantity(1)
+                        .build()))
                 .build();
 
         mockMvc.perform(post("/api/orders")

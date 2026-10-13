@@ -98,6 +98,55 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * The nested constraints used to be skipped because the items list was not annotated with
+     * {@code @Valid}, so a zero quantity reached the service.
+     */
+    @Test
+    void shouldRejectItemWithZeroQuantity() throws Exception {
+        String invalidJson = """
+                {
+                    "userId": "user-1",
+                    "items": [{"productId": "prod-1", "productName": "Test", "quantity": 0}]
+                }
+                """;
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectItemWithMissingQuantity() throws Exception {
+        String invalidJson = """
+                {
+                    "userId": "user-1",
+                    "items": [{"productId": "prod-1", "productName": "Test"}]
+                }
+                """;
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectItemWithBlankProductId() throws Exception {
+        String invalidJson = """
+                {
+                    "userId": "user-1",
+                    "items": [{"productId": " ", "productName": "Test", "quantity": 1}]
+                }
+                """;
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void shouldReserveOrder() throws Exception {
         when(orderService.reserveOrder("order-1")).thenReturn(sampleResponse());
