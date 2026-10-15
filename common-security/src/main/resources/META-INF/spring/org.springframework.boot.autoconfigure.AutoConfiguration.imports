@@ -1,1 +1,2 @@
 com.orderplatform.common.security.CommonSecurityAutoConfiguration
+com.orderplatform.common.security.TokenBlacklistAutoConfiguration

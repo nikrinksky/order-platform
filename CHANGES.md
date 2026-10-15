@@ -256,10 +256,15 @@ cd auth-service
 
 ### 3. ✅ Kafka события
 
+События публикуются в формате **Avro** через **транзакционный outbox**
+(`outbox-spring-boot-starter`). Схемы: `common-events/src/main/avro/user-created.avsc`
+и `user-updated.avsc`; тип события задаётся в `outbox.events` конфигурации auth-service.
+
 #### user.created
 ```json
 {
   "id": "uuid-123",
+  "username": "user@example.com",
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
@@ -268,13 +273,14 @@ cd auth-service
   "createdAt": "2026-06-22T12:00:00Z"
 }
 ```
-- Отправляется при регистрации нового пользователя
+- Записывается в outbox в одной транзакции с созданием пользователя
 - Пользователь user-service создает проекцию в `user_profile.users`
 
 #### user.updated
 ```json
 {
   "id": "uuid-123",
+  "username": "user@example.com",
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
@@ -283,19 +289,22 @@ cd auth-service
   "updatedAt": "2026-06-22T12:00:00Z"
 }
 ```
-- Отправляется при обновлении данных пользователя
+- Записывается в outbox при обновлении данных пользователя или его ролей
 - Пользователь user-service обновляет проекцию в `user_profile.users`
 
 ### 4. ✅ Конфигурация Kafka
 
 #### auth-service (отправитель)
-- `KafkaTemplate<String, Object>` для отправки событий
+- Producer: `KafkaAvroSerializer`, `acks=all`, Schema Registry (`SCHEMA_REGISTRY_URL`)
+- События попадают в Kafka через реле outbox (ретраи, dead-letter `<topic>.DLT`)
 - Topic: `user.created`, `user.updated`
 
 #### user-service (консьюмер)
 - `@KafkaListener` для обработки событий
+- Десериализация: `ErrorHandlingDeserializer` + `KafkaAvroDeserializer` (`specific.avro.reader=true`)
 - Группа: `user-service-group`
 - Темы: `user.created`, `user.updated`
+- Ошибка обработки не глушится: запись ретраится контейнером, а не теряется молча
 
 ### 5. ✅ Инициализация схем
 

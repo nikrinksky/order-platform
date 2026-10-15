@@ -5,6 +5,7 @@
 package com.orderplatform.auth.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -271,6 +272,25 @@ public class JwtService {
      */
     public long getExpirationFromToken(String token) {
         return extractExpiration(token).getTime();
+    }
+
+    /**
+     * Gets expiration time from a token that is allowed to be already expired.
+     *
+     * <p>Refreshing happens precisely when the access token has run out, and the flow still has to
+     * read its expiration to decide how long to keep it in the blacklist. Parsing it the strict way
+     * throws {@link ExpiredJwtException}, which used to fail the refresh request itself, so the
+     * expiration is read from the claims the exception carries.
+     *
+     * @param token JWT token, expired or not
+     * @return expiration time in milliseconds
+     */
+    public long getExpirationFromTokenAllowingExpired(String token) {
+        try {
+            return extractExpiration(token).getTime();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims().getExpiration().getTime();
+        }
     }
 
     /**

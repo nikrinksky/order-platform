@@ -154,8 +154,6 @@ user-service/
 │   │   │   └── UserRepositoryTest.java
 │   │   ├── model/
 │   │   │   └── UserTest.java
-│   │   ├── dto/
-│   │   │   └── UserCreatedEventTest.java
 │   │   ├── integration/
 │   │   │   ├── AbstractUserIntegrationTest.java
 │   │   │   ├── UserIntegrationTest.java

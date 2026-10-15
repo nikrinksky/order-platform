@@ -1,10 +1,12 @@
 package com.orderplatform.auth.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -120,5 +122,39 @@ class JwtServiceTest {
         // Access token should be invalid
         boolean isAccessInvalid = jwtService.isRefreshTokenValid(accessToken);
         assertThat(isAccessInvalid).isFalse();
+    }
+
+    @Test
+    void testGetExpirationFromTokenAllowingExpired_ShouldReadExpiredToken() throws Exception {
+        String expiredToken = generateExpiredToken();
+
+        // The strict reader rejects an expired token, the lenient one has to report its expiry
+        assertThatThrownBy(() -> jwtService.getExpirationFromToken(expiredToken))
+                .isInstanceOf(ExpiredJwtException.class);
+
+        long expiration = jwtService.getExpirationFromTokenAllowingExpired(expiredToken);
+
+        assertThat(expiration).isLessThan(System.currentTimeMillis());
+    }
+
+    @Test
+    void testGetExpirationFromTokenAllowingExpired_ShouldReadValidToken() {
+        String token = jwtService.generateToken(userDetails);
+
+        assertThat(jwtService.getExpirationFromTokenAllowingExpired(token))
+                .isEqualTo(jwtService.getExpirationFromToken(token));
+    }
+
+    /** Issues an access token whose lifetime is already over. */
+    private String generateExpiredToken() throws Exception {
+        var expirationField = JwtService.class.getDeclaredField("expiration");
+        expirationField.setAccessible(true);
+        Object original = expirationField.get(jwtService);
+        try {
+            expirationField.set(jwtService, -60000L);
+            return jwtService.generateToken(userDetails);
+        } finally {
+            expirationField.set(jwtService, original);
+        }
     }
 }

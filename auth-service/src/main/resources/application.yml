@@ -34,17 +34,40 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers:  ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
       properties:
-        spring.json.add.type.headers: false
+        enable.idempotence: true
+        auto.register.schemas: true
     consumer:
       group-id: auth-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+
+# Transactional outbox: a user and its event are written in one transaction, so a broker outage
+# cannot leave a registered account that user-service never learns about. The event mapping is
+# explicit so an unknown event type fails at startup, not mid incident.
+outbox:
+  events:
+    UserCreatedEvent: com.orderplatform.events.user.UserCreatedEvent
+    UserUpdatedEvent: com.orderplatform.events.user.UserUpdatedEvent
+  retry:
+    max-attempts: 3
+    initial-backoff-ms: 200
+    max-backoff-ms: 2000
+    multiplier: 2.0
+    max-total-attempts: 10
+  relay:
+    batch-size: 100
+    poll-interval-ms: 1000
+    claim-timeout-ms: 60000
+    send-timeout-ms: 10000
 
 jwt:
   secret: ${JWT_SECRET}
@@ -186,13 +209,15 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: redpanda:9092
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
       properties:
-        spring.json.value.default.to.string: true
-        spring.json.add.type.headers: false
-        compression.type: none
+        enable.idempotence: true
+        auto.register.schemas: true
     consumer:
       group-id: auth-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer

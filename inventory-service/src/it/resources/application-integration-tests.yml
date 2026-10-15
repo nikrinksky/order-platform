@@ -15,6 +15,10 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
   kafka:
     enabled: false
+# The tests run without Redis, and the blacklist lookup would only add connection noise there.
+security:
+  token-blacklist:
+    enabled: false
 logging:
   level:
     com.orderplatform.inventory: INFO

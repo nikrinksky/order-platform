@@ -45,6 +45,24 @@
             <artifactId>spring-kafka</artifactId>
             <version>${spring-kafka.version}</version>
         </dependency>
+        <!-- Avro event contracts: user.created / user.updated are published from here,
+             so producer and consumer share one schema definition -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transactional outbox: a user is stored and its event is appended in one transaction,
+             so a broker outage can no longer lose the event of an already registered account -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>outbox-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

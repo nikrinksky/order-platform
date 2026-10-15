@@ -1,34 +1,41 @@
 /**
  * Service for user operations.
- * Handles user registration, updates and Kafka event publishing.
+ * Handles user registration, updates and event publication through the outbox.
  */
 package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.RegisterRequest;
-import com.orderplatform.auth.dto.UserCreatedEvent;
 import com.orderplatform.auth.dto.UserDto;
-import com.orderplatform.auth.dto.UserUpdatedEvent;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
+import com.orderplatform.events.user.UserCreatedEvent;
+import com.orderplatform.events.user.UserUpdatedEvent;
+import com.orderplatform.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Service for user operations.
- * Handles user registration, updates and Kafka event publishing.
+ * Handles user registration, updates and event publication through the outbox.
+ *
+ * <p>Events go through the transactional outbox rather than straight to Kafka: the account and the
+ * event that announces it are written in one transaction, so a broker outage can no longer leave a
+ * registered user that user-service never learns about.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,9 +46,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
-    
-    @Autowired(required = false)
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
 
     /**
      * Registers a new user.
@@ -49,6 +54,7 @@ public class UserService {
      * @param request the registration request containing user details
      * @return the registered user DTO
      */
+    @Transactional
     public UserDto register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             String msg = "User with email " + request.getEmail() + " already exists";
@@ -66,7 +72,7 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
 
-        sendUserCreatedEvent(savedUser);
+        appendUserCreated(savedUser);
 
         return userMapper.toDto(savedUser);
     }
@@ -78,6 +84,7 @@ public class UserService {
      * @param request the update request containing user details
      * @return the updated user DTO
      */
+    @Transactional
     public UserDto updateUser(String userId, RegisterRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
@@ -87,7 +94,7 @@ public class UserService {
 
         User updatedUser = userRepository.save(user);
 
-        sendUserUpdatedEvent(updatedUser);
+        appendUserUpdated(updatedUser);
 
         return userMapper.toDto(updatedUser);
     }
@@ -102,6 +109,7 @@ public class UserService {
      * @param roles the new, non-empty set of roles
      * @return the updated user DTO
      */
+    @Transactional
     public UserDto updateRoles(String userId, Set<Role> roles) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
@@ -110,7 +118,7 @@ public class UserService {
 
         User updatedUser = userRepository.save(user);
 
-        sendUserUpdatedEvent(updatedUser);
+        appendUserUpdated(updatedUser);
 
         log.info("Roles updated for user {}: {}", updatedUser.getEmail(), roles);
 
@@ -129,6 +137,7 @@ public class UserService {
      * @param firstName administrator first name
      * @param lastName administrator last name
      */
+    @Transactional
     public void ensureAdmin(String email, String password, String firstName, String lastName) {
         Optional<User> existing = userRepository.findByEmail(email);
 
@@ -143,7 +152,7 @@ public class UserService {
             roles.add(Role.ROLE_ADMIN);
             admin.setRoles(roles);
 
-            sendUserUpdatedEvent(userRepository.save(admin));
+            appendUserUpdated(userRepository.save(admin));
             log.info("Granted ROLE_ADMIN to existing account: {}", email);
             return;
         }
@@ -157,68 +166,71 @@ public class UserService {
                 .isActive(true)
                 .build();
 
-        sendUserCreatedEvent(userRepository.save(admin));
+        appendUserCreated(userRepository.save(admin));
         log.info("Admin account created: {}", email);
     }
 
     /**
-     * Sends a user created event to Kafka.
+     * Appends the user.created event inside the caller's transaction.
+     *
+     * <p>The event id is derived from the business operation, so a retried registration cannot
+     * append the same announcement twice.
      *
      * @param user the saved user entity
      */
-    private void sendUserCreatedEvent(User user) {
-        if (kafkaTemplate != null) {
-            try {
-                UserCreatedEvent event = UserCreatedEvent.builder()
-                        .id(user.getId())
-                        .username(user.getEmail())
-                        .email(user.getEmail())
-                        .firstName(user.getFirstName())
-                        .lastName(user.getLastName())
-                        .roles(user.getRoles().stream()
-                                .map(Enum::name)
-                                .collect(Collectors.toSet()))
-                        .isActive(user.isActive())
-                        .createdAt(user.getCreatedAt())
-                        .build();
-
-                kafkaTemplate.send("user.created", user.getId(), event);
-                log.info("UserCreatedEvent sent for user: {}", user.getEmail());
-            } catch (Exception e) {
-                log.error("Failed to send UserCreatedEvent: {}", e.getMessage());
-            }
-        } else {
-            log.warn("KafkaTemplate is not available - skipping UserCreatedEvent send");
-        }
+    private void appendUserCreated(User user) {
+        outboxService.append(Topics.USER_CREATED, user.getId(), user.getId() + ":CREATED",
+                UserCreatedEvent.newBuilder()
+                        .setId(user.getId())
+                        .setUsername(user.getEmail())
+                        .setEmail(user.getEmail())
+                        .setFirstName(user.getFirstName())
+                        .setLastName(user.getLastName())
+                        .setRoles(roleNames(user))
+                        .setIsActive(user.isActive())
+                        .setCreatedAt(toInstant(user.getCreatedAt()))
+                        .build());
+        log.info("UserCreatedEvent appended for user: {}", user.getEmail());
     }
 
     /**
-     * Sends a user updated event to Kafka.
+     * Appends the user.updated event inside the caller's transaction.
      *
      * @param user the updated user entity
      */
-    private void sendUserUpdatedEvent(User user) {
-        if (kafkaTemplate != null) {
-            try {
-                UserUpdatedEvent event = UserUpdatedEvent.builder()
-                        .id(user.getId())
-                        .email(user.getEmail())
-                        .firstName(user.getFirstName())
-                        .lastName(user.getLastName())
-                        .roles(user.getRoles().stream()
-                                .map(Enum::name)
-                                .collect(Collectors.toSet()))
-                        .isActive(user.isActive())
-                        .updatedAt(user.getUpdatedAt())
-                        .build();
+    private void appendUserUpdated(User user) {
+        outboxService.append(Topics.USER_UPDATED, user.getId(), user.getId() + ":UPDATED",
+                UserUpdatedEvent.newBuilder()
+                        .setId(user.getId())
+                        .setUsername(user.getEmail())
+                        .setEmail(user.getEmail())
+                        .setFirstName(user.getFirstName())
+                        .setLastName(user.getLastName())
+                        .setRoles(roleNames(user))
+                        .setIsActive(user.isActive())
+                        .setUpdatedAt(toInstant(user.getUpdatedAt()))
+                        .build());
+        log.info("UserUpdatedEvent appended for user: {}", user.getEmail());
+    }
 
-                kafkaTemplate.send("user.updated", user.getId(), event);
-                log.info("UserUpdatedEvent sent for user: {}", user.getEmail());
-            } catch (Exception e) {
-                log.error("Failed to send UserUpdatedEvent: {}", e.getMessage());
-            }
-        } else {
-            log.warn("KafkaTemplate is not available - skipping UserUpdatedEvent send");
+    private static List<CharSequence> roleNames(User user) {
+        return new ArrayList<>(user.getRoles().stream().map(Enum::name).toList());
+    }
+
+    /**
+     * The entity keeps timestamps as {@link LocalDateTime}, the Avro contract as {@link Instant}.
+     */
+    private static Instant toInstant(LocalDateTime timestamp) {
+        return timestamp == null ? null : timestamp.toInstant(ZoneOffset.UTC);
+    }
+
+    /** Kafka topics this service publishes to. Kept here so no string is typed twice. */
+    static final class Topics {
+
+        static final String USER_CREATED = "user.created";
+        static final String USER_UPDATED = "user.updated";
+
+        private Topics() {
         }
     }
 }
