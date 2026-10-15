@@ -3,10 +3,14 @@ package com.orderplatform.gateway.filter;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -26,6 +30,8 @@ import java.util.Date;
 @Component
 public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthGlobalFilter.class);
+
     /** Claim name for token type. */
     private static final String TOKEN_TYPE_CLAIM = "token_use";
 
@@ -38,8 +44,19 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     /** Prefix length of "Bearer " header value. */
     private static final int BEARER_PREFIX_LENGTH = 7;
 
+    /** Key prefix of a blacklist entry, kept in sync with auth-service. */
+    private static final String BLACKLIST_KEY_PREFIX = "blacklist:";
+
     @Value("${jwt.secret}")
     private String secret;
+
+    /**
+     * Optional: absent in a unit test or a deployment without Redis. When present, a token revoked
+     * on logout is rejected here as well, so the gateway does not let it through for the rest of
+     * its lifetime.
+     */
+    @Autowired(required = false)
+    private ReactiveStringRedisTemplate redisTemplate;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -64,6 +81,8 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
         String token = authHeader.substring(BEARER_PREFIX_LENGTH);
 
+        String userId;
+        String roles;
         try {
             Claims claims = Jwts.parserBuilder()
                     .setSigningKey(getSignInKey())
@@ -77,9 +96,20 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
                 return exchange.getResponse().setComplete();
             }
 
-            String userId = claims.get(USER_ID_CLAIM, String.class);
+            userId = claims.get(USER_ID_CLAIM, String.class);
             Object rolesObj = claims.get(ROLES_CLAIM);
-            String roles = rolesObj != null ? String.join(",", (java.util.List<String>) rolesObj) : "";
+            roles = rolesObj != null ? String.join(",", (java.util.List<String>) rolesObj) : "";
+        } catch (Exception e) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+
+        return isRevoked(token).flatMap(revoked -> {
+            if (revoked) {
+                log.warn("Rejected a revoked access token on {}", path);
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
 
             // Forward identity to downstream services
             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
@@ -88,10 +118,29 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
-        } catch (Exception e) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
+        });
+    }
+
+    /**
+     * Asks the blacklist whether the token was revoked.
+     *
+     * <p>Fails open: an unreachable Redis must not stop every authenticated request, and the
+     * exposure is limited by the access token lifetime.
+     *
+     * @param token the access token to look up
+     * @return whether the token is revoked
+     */
+    private Mono<Boolean> isRevoked(String token) {
+        if (redisTemplate == null) {
+            return Mono.just(false);
         }
+        return redisTemplate.hasKey(BLACKLIST_KEY_PREFIX + token)
+                .defaultIfEmpty(false)
+                .onErrorResume(e -> {
+                    log.warn("Cannot reach the token blacklist, accepting the token: {}",
+                            e.getMessage());
+                    return Mono.just(false);
+                });
     }
 
     private boolean isPublicPath(String path, String method) {

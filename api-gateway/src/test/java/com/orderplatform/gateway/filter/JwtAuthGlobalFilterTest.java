@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class JwtAuthGlobalFilterTest {
 
@@ -222,6 +226,49 @@ class JwtAuthGlobalFilterTest {
     @Test
     void shouldHaveHighPrecedenceOrder() {
         assertEquals(-100, filter.getOrder());
+    }
+
+    @Test
+    void shouldRejectRevokedAccessToken() {
+        ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey(anyString())).thenReturn(Mono.just(true));
+        ReflectionTestUtils.setField(filter, "redisTemplate", redisTemplate);
+
+        String token = token("access", new Date(System.currentTimeMillis() + 3_600_000),
+                List.of("USER"));
+
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                runFilter(HttpMethod.GET, "/api/orders", "Bearer " + token));
+    }
+
+    @Test
+    void shouldPassAccessTokenThatIsNotRevoked() {
+        ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey(anyString())).thenReturn(Mono.just(false));
+        ReflectionTestUtils.setField(filter, "redisTemplate", redisTemplate);
+
+        String token = token("access", new Date(System.currentTimeMillis() + 3_600_000),
+                List.of("USER"));
+
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/api/orders", "Bearer " + token));
+    }
+
+    /**
+     * An unreachable Redis must not turn into a gateway outage: the token is accepted.
+     */
+    @Test
+    void shouldAcceptTokenWhenRedisIsUnreachable() {
+        ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey(anyString()))
+                .thenReturn(Mono.error(new RuntimeException("Redis is down")));
+        ReflectionTestUtils.setField(filter, "redisTemplate", redisTemplate);
+
+        String token = token("access", new Date(System.currentTimeMillis() + 3_600_000),
+                List.of("USER"));
+
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/api/orders", "Bearer " + token));
     }
 }
 

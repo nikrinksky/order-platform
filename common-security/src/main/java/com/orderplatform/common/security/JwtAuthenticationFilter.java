@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -36,6 +37,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
 
+    /**
+     * Optional: only present when the service has the blacklist check enabled. Without it a token
+     * that auth-service revoked on logout would keep working until it expired.
+     */
+    private final ObjectProvider<TokenBlacklistChecker> tokenBlacklistChecker;
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
@@ -60,6 +67,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
+            if (isRevoked(token)) {
+                log.warn("Revoked access token on {} {}", request.getMethod(),
+                        request.getRequestURI());
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
+                return;
+            }
+
             String userId = jwtService.extractUserId(token);
             List<String> roles = jwtService.extractRoles(token);
             List<GrantedAuthority> authorities = roles.stream()
@@ -77,5 +91,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.warn("JWT validation error: {}", e.getMessage());
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
         }
+    }
+
+    /**
+     * Consults the blacklist when the service has one configured.
+     *
+     * @param token the access token to check
+     * @return true when the token has been revoked
+     */
+    private boolean isRevoked(String token) {
+        TokenBlacklistChecker checker = tokenBlacklistChecker.getIfAvailable();
+        return checker != null && checker.isBlacklisted(token);
     }
 }

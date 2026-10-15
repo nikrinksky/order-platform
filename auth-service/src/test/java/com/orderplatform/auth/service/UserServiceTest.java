@@ -5,6 +5,10 @@ import com.orderplatform.auth.dto.UserDto;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
+import com.orderplatform.events.user.UserCreatedEvent;
+import com.orderplatform.events.user.UserUpdatedEvent;
+import com.orderplatform.outbox.OutboxService;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,10 +16,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +45,7 @@ class UserServiceTest {
     private UserMapper userMapper;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private OutboxService outboxService;
 
     @InjectMocks
     private UserService userService;
@@ -68,6 +71,8 @@ class UserServiceTest {
                 .lastName("User")
                 .roles(Set.of(Role.ROLE_USER))
                 .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         userDto = UserDto.builder()
@@ -76,7 +81,6 @@ class UserServiceTest {
                 .firstName("Test")
                 .lastName("User")
                 .build();
-        ReflectionTestUtils.setField(userService, "kafkaTemplate", kafkaTemplate);
     }
 
     @Test
@@ -90,7 +94,30 @@ class UserServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo("test@example.com");
-        verify(kafkaTemplate).send(eq("user.created"), anyString(), any());
+        verify(outboxService).append(eq("user.created"), eq("123"), eq("123:CREATED"),
+                any(UserCreatedEvent.class));
+    }
+
+    /**
+     * The event must carry the id user-service stores, otherwise the projection ends up with a
+     * user it cannot match to anything.
+     */
+    @Test
+    void testRegister_EventCarriesTheSavedUserData() {
+        when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenReturn(user);
+        when(userMapper.toDto(any(User.class))).thenReturn(userDto);
+
+        userService.register(request);
+
+        ArgumentCaptor<SpecificRecordBase> captor = ArgumentCaptor.forClass(SpecificRecordBase.class);
+        verify(outboxService).append(eq("user.created"), eq("123"), eq("123:CREATED"), captor.capture());
+        UserCreatedEvent event = (UserCreatedEvent) captor.getValue();
+        assertThat(event.getId().toString()).isEqualTo("123");
+        assertThat(event.getEmail().toString()).isEqualTo("test@example.com");
+        assertThat(event.getRoles()).containsExactly("ROLE_USER");
+        assertThat(event.getIsActive()).isTrue();
     }
 
     @Test
@@ -112,7 +139,8 @@ class UserServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo("test@example.com");
-        verify(kafkaTemplate).send(eq("user.updated"), anyString(), any());
+        verify(outboxService).append(eq("user.updated"), eq("123"), eq("123:UPDATED"),
+                any(UserUpdatedEvent.class));
     }
 
     @Test
@@ -125,17 +153,16 @@ class UserServiceTest {
     }
 
     @Test
-    void testRegister_SkipsKafkaWhenTemplateNull() {
-        ReflectionTestUtils.setField(userService, "kafkaTemplate", null);
+    void testRegister_DoesNotPublishWithoutGoingThroughTheOutbox() {
         when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toDto(any(User.class))).thenReturn(userDto);
 
-        UserDto result = userService.register(request);
+        userService.register(request);
 
-        assertThat(result).isNotNull();
-        verify(kafkaTemplate, never()).send(anyString(), any(), any());
+        // Every event goes through the outbox: a direct send would lose it on a broker outage
+        verify(outboxService, never()).append(anyString(), anyString(), any(SpecificRecordBase.class));
     }
 
     @Test
@@ -148,7 +175,8 @@ class UserServiceTest {
 
         assertThat(result).isNotNull();
         verify(userRepository).save(any(User.class));
-        verify(kafkaTemplate).send(eq("user.updated"), anyString(), any());
+        verify(outboxService).append(eq("user.updated"), eq("123"), eq("123:UPDATED"),
+                any(UserUpdatedEvent.class));
     }
 
     @Test
@@ -164,7 +192,7 @@ class UserServiceTest {
     void testEnsureAdmin_CreatesNewAdminWithAdminRole() {
         when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("secret123")).thenReturn("encoded");
-        // JPA assigns the id on persist; the mock stands in for that so the Kafka key is non-null.
+        // JPA assigns the id on persist; the mock stands in for that so the event key is non-null.
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User toSave = invocation.getArgument(0);
             if (toSave.getId() == null) {
@@ -181,7 +209,8 @@ class UserServiceTest {
         assertThat(saved.getEmail()).isEqualTo("admin@example.com");
         assertThat(saved.getPassword()).isEqualTo("encoded");
         assertThat(saved.getRoles()).containsExactly(Role.ROLE_ADMIN);
-        verify(kafkaTemplate).send(eq("user.created"), anyString(), any());
+        verify(outboxService).append(eq("user.created"), eq("generated-id"),
+                eq("generated-id:CREATED"), any(UserCreatedEvent.class));
     }
 
     @Test
@@ -196,7 +225,7 @@ class UserServiceTest {
         userService.ensureAdmin("admin@example.com", "secret123", "Admin", "User");
 
         verify(userRepository, never()).save(any(User.class));
-        verify(kafkaTemplate, never()).send(anyString(), any(), any());
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -214,6 +243,7 @@ class UserServiceTest {
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         assertThat(captor.getValue().getRoles()).contains(Role.ROLE_ADMIN, Role.ROLE_USER);
-        verify(kafkaTemplate).send(eq("user.updated"), anyString(), any());
+        verify(outboxService).append(eq("user.updated"), eq("123"), eq("123:UPDATED"),
+                any(UserUpdatedEvent.class));
     }
 }

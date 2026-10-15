@@ -9,6 +9,10 @@ spring:
       database: ${SPRING_DATA_MONGODB_DATABASE:notificationdb}
       username: ${SPRING_DATA_MONGODB_USERNAME:notificationuser}
       password: ${SPRING_DATA_MONGODB_PASSWORD:dev123}
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
     properties:
@@ -23,6 +27,13 @@ spring:
         # Bounded listener retries: 1s pause, 3 attempts, then the record goes to <topic>.DLT
         retry.backoff-ms: 1000
         retry.max-attempts: 3
+
+# Tokens revoked on logout or refresh are rejected here too, so logout is not only cosmetic on the
+# service that issued the token. The lookup fails open: a Redis outage must not stop every
+# authenticated request.
+security:
+  token-blacklist:
+    enabled: true
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
@@ -45,6 +56,10 @@ spring:
       database: ${SPRING_DATA_MONGODB_DATABASE:notificationdb}
       username: ${SPRING_DATA_MONGODB_USERNAME:notificationuser}
       password: ${SPRING_DATA_MONGODB_PASSWORD:dev123}
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:redpanda:9092}
     properties:

@@ -1,7 +1,7 @@
 package com.orderplatform.user.service;
 
-import com.orderplatform.user.dto.UserCreatedEvent;
-import com.orderplatform.user.dto.UserUpdatedEvent;
+import com.orderplatform.events.user.UserCreatedEvent;
+import com.orderplatform.events.user.UserUpdatedEvent;
 import com.orderplatform.user.model.Role;
 import com.orderplatform.user.model.User;
 import com.orderplatform.user.repository.UserRepository;
@@ -11,6 +11,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -33,22 +36,22 @@ public class UserConsumerService {
     public void consumeUserCreated(@Payload UserCreatedEvent event) {
         log.info("Received user.created event: {}", event.getEmail());
 
-        if (userRepository.existsByEmail(event.getEmail())) {
+        if (userRepository.existsByEmail(event.getEmail().toString())) {
             log.warn("User already exists, skipping: {}", event.getEmail());
             return;
         }
 
         User user = User.builder()
-                .id(event.getId())
-                .username(event.getUsername())
-                .email(event.getEmail())
-                .firstName(event.getFirstName())
-                .lastName(event.getLastName())
+                .id(event.getId().toString())
+                .username(event.getUsername().toString())
+                .email(event.getEmail().toString())
+                .firstName(asString(event.getFirstName()))
+                .lastName(asString(event.getLastName()))
                 .roles(event.getRoles().stream()
-                        .map(Role::valueOf)
+                        .map(role -> Role.valueOf(role.toString()))
                         .collect(Collectors.toSet()))
-                .isActive(event.isActive())
-                .createdAt(event.getCreatedAt())
+                .isActive(event.getIsActive())
+                .createdAt(toLocalDateTime(event.getCreatedAt()))
                 .build();
 
         userRepository.save(user);
@@ -59,7 +62,7 @@ public class UserConsumerService {
     public void consumeUserUpdated(@Payload UserUpdatedEvent event) {
         log.info("Received user.updated event: {}", event.getEmail());
 
-        Optional<User> existingUser = userRepository.findById(event.getId());
+        Optional<User> existingUser = userRepository.findById(event.getId().toString());
         if (existingUser.isEmpty()) {
             log.warn("User not found for update: {}", event.getId());
             return;
@@ -69,19 +72,33 @@ public class UserConsumerService {
 
         User updatedUser = User.builder()
                 .id(user.getId())
-                .username(event.getUsername())
+                .username(event.getUsername().toString())
                 .email(user.getEmail())
-                .firstName(event.getFirstName())
-                .lastName(event.getLastName())
+                .firstName(asString(event.getFirstName()))
+                .lastName(asString(event.getLastName()))
                 .roles(event.getRoles().stream()
-                        .map(Role::valueOf)
+                        .map(role -> Role.valueOf(role.toString()))
                         .collect(Collectors.toSet()))
-                .isActive(event.isActive())
+                .isActive(event.getIsActive())
                 .createdAt(user.getCreatedAt())
-                .updatedAt(event.getUpdatedAt())
+                .updatedAt(toLocalDateTime(event.getUpdatedAt()))
                 .build();
 
         userRepository.save(updatedUser);
         log.info("User updated successfully: {}", updatedUser.getEmail());
+    }
+
+    /**
+     * Avro string fields are {@link CharSequence}, the entity holds {@link String}.
+     */
+    private static String asString(CharSequence value) {
+        return value == null ? null : value.toString();
+    }
+
+    /**
+     * Avro timestamps arrive as {@link Instant}, the entity stores {@link LocalDateTime}.
+     */
+    private static LocalDateTime toLocalDateTime(Instant timestamp) {
+        return timestamp == null ? null : LocalDateTime.ofInstant(timestamp, ZoneOffset.UTC);
     }
 }

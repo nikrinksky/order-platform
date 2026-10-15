@@ -1,7 +1,7 @@
 package com.orderplatform.user.integration;
 
+import com.orderplatform.events.user.UserCreatedEvent;
 import com.orderplatform.user.AbstractUserIntegrationTest;
-import com.orderplatform.user.dto.UserCreatedEvent;
 import com.orderplatform.user.model.User;
 import com.orderplatform.user.repository.UserRepository;
 import com.orderplatform.user.service.UserConsumerService;
@@ -13,10 +13,10 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,22 +58,23 @@ class UserIntegrationTest extends AbstractUserIntegrationTest {
     @Test
     void testConsumeUserCreated_PersistsProjectionWithEventId() {
         String eventId = UUID.randomUUID().toString();
-        UserCreatedEvent event = UserCreatedEvent.builder()
-                .id(eventId)
-                .username("consumed_" + UUID.randomUUID().toString().substring(0, 8))
-                .email("consumed" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
-                .firstName("Consumed")
-                .lastName("User")
-                .roles(Set.of("ROLE_USER"))
-                .isActive(true)
-                .createdAt(LocalDateTime.now())
+        String email = "consumed" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        UserCreatedEvent event = UserCreatedEvent.newBuilder()
+                .setId(eventId)
+                .setUsername("consumed_" + UUID.randomUUID().toString().substring(0, 8))
+                .setEmail(email)
+                .setFirstName("Consumed")
+                .setLastName("User")
+                .setRoles(List.of("ROLE_USER"))
+                .setIsActive(true)
+                .setCreatedAt(Instant.now())
                 .build();
 
         userConsumerService.consumeUserCreated(event);
 
         Optional<User> stored = userRepository.findById(eventId);
         assertThat(stored).isPresent();
-        assertThat(stored.get().getEmail()).isEqualTo(event.getEmail());
+        assertThat(stored.get().getEmail()).isEqualTo(email);
         assertThat(stored.get().getRoles()).containsExactly(com.orderplatform.user.model.Role.ROLE_USER);
     }
 

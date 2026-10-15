@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "UserUpdatedEvent",
+  "namespace": "com.orderplatform.events.user",
+  "doc": "Emitted by auth-service when an account or its roles change. Topic: user.updated",
+  "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "username", "type": "string"},
+    {"name": "email", "type": "string"},
+    {"name": "firstName", "type": ["null", "string"], "default": null},
+    {"name": "lastName", "type": ["null", "string"], "default": null},
+    {"name": "roles", "type": {"type": "array", "items": "string"}},
+    {"name": "isActive", "type": "boolean"},
+    {"name": "updatedAt", "type": ["null", {"type": "long", "logicalType": "timestamp-millis"}], "default": null}
+  ]
+}

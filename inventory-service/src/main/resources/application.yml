@@ -25,6 +25,18 @@ spring:
       properties:
         enable.idempotence: true
         auto.register.schemas: true
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}
+
+# Tokens revoked on logout or refresh are rejected here too, so logout is not only cosmetic on the
+# service that issued the token. The lookup fails open: a Redis outage must not stop every
+# authenticated request.
+security:
+  token-blacklist:
+    enabled: true
 
 # Transactional outbox: reservation events are stored with the stock change
 # and published by the relay, so a broker outage cannot lose them.
@@ -73,4 +85,9 @@ spring:
       properties:
         enable.idempotence: true
         auto.register.schemas: true
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}
 

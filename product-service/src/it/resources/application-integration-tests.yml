@@ -18,6 +18,10 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+# The tests run without Redis, and the blacklist lookup would only add connection noise there.
+security:
+  token-blacklist:
+    enabled: false
 logging:
   level:
     com.orderplatform.product: INFO

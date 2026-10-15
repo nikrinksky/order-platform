@@ -20,17 +20,24 @@ spring:
       hibernate:
         default_schema: user_profile
 
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}
+
   kafka:
     enabled: false  # По умолчанию выключен, включается в dev/docker профилях
     bootstrap-servers: localhost:19092
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
     consumer:
       group-id: user-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
-        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
-        spring.json.use.type.headers: false
+        spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
+        specific.avro.reader: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -41,6 +48,13 @@ server:
 logging:
   level:
     com.orderplatform.user: DEBUG
+
+# Tokens revoked on logout or refresh are rejected here too, so logout is not only cosmetic on the
+# service that issued the token. The lookup fails open: a Redis outage must not stop every
+# authenticated request.
+security:
+  token-blacklist:
+    enabled: true
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
@@ -75,15 +89,16 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: localhost:19092
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
     consumer:
       group-id: user-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
-        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
-        spring.json.use.type.headers: false
+        spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
+        specific.avro.reader: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -141,19 +156,24 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: redpanda:9092
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
     consumer:
       group-id: user-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "com.orderplatform.user.dto,com.orderplatform.auth.dto"
-        spring.json.value.default.type: com.orderplatform.user.dto.UserCreatedEvent
-        spring.json.use.type.headers: false
+        spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
+        specific.avro.reader: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        spring.json.value.default.to.string: true
-        spring.json.add.type.headers: false
         compression.type: none
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:dev123}

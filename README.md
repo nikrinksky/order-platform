@@ -290,7 +290,13 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 
 - **auth-service**: Хранит полную модель пользователя (с паролем) в схеме `auth` базы `orderplatform`
 - **user-service**: Хранит проекцию пользователя (без пароля) в схеме `user_profile` базы `userdb`
-- **Интеграция**: Через Kafka события `user.created` и `user.updated`
+- **Интеграция**: Через Kafka события `user.created` и `user.updated` в формате Avro
+  (схемы — `common-events/src/main/avro/user-*.avsc`, реестр — Schema Registry)
+
+Доставка событий гарантируется **транзакционным outbox**: аккаунт и его событие пишутся
+в одной транзакции, а реле (`outbox-spring-boot-starter`) публикует их в Kafka с ретраями
+и переводом безнадёжных записей в `<topic>.DLT`. Падение брокера больше не приводит к тому,
+что зарегистрированный пользователь остаётся неизвестным user-service.
 
 Детальное описание архитектурных изменений см. в [CHANGES.md](CHANGES.md)
 

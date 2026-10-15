@@ -4,6 +4,8 @@ import com.orderplatform.auth.AbstractIntegrationTest;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
+import com.orderplatform.outbox.OutboxRecord;
+import com.orderplatform.outbox.OutboxRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,8 +31,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private OutboxRepository outboxRepository;
+
     @BeforeEach
     void cleanUp() {
+        outboxRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -67,6 +73,28 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).containsKey("email");
         assertThat(response.getBody().get("email")).isEqualTo(uniqueEmail);
+    }
+
+    /**
+     * The account and the announcement of it must be written in one transaction: publishing
+     * straight to Kafka used to lose the event whenever the broker was down, leaving a user that
+     * user-service never learned about.
+     */
+    @Test
+    void testRegister_AppendsUserCreatedEventToOutbox() {
+        String uniqueEmail = generateUniqueEmail("outbox");
+
+        registerUser(uniqueEmail, "password123", "Outbox", "User");
+
+        List<OutboxRecord> records = outboxRepository.findAll();
+        assertThat(records).hasSize(1);
+
+        OutboxRecord record = records.get(0);
+        assertThat(record.getTopic()).isEqualTo("user.created");
+        assertThat(record.getEventType()).isEqualTo("UserCreatedEvent");
+        assertThat(record.getAggregateId()).isNotBlank();
+        assertThat(record.getEventId()).isEqualTo(record.getAggregateId() + ":CREATED");
+        assertThat(record.getPayload()).contains(uniqueEmail);
     }
 
     @Test

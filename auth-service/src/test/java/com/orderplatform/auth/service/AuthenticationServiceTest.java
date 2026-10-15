@@ -262,13 +262,86 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
-        when(jwtService.getExpirationFromToken(oldAccessToken)).thenReturn(System.currentTimeMillis() - 1000);
+        // The access token ran out long ago: refreshing must not read its expiration the strict way
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldAccessToken))
+                .thenReturn(System.currentTimeMillis() - 1000);
 
         Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
 
         assertThat(response.get("accessToken")).isEqualTo("new-access-token");
         org.mockito.Mockito.verify(tokenBlacklistService, org.mockito.Mockito.never())
-                .blacklistToken(oldAccessToken, 0);
+                .blacklistToken(eq(oldAccessToken), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void testRefreshToken_ShouldRotateRefreshToken() {
+        String oldAccessToken = "old-access-token";
+        String oldRefreshToken = "old-refresh-token";
+
+        when(jwtService.isRefreshToken(oldRefreshToken)).thenReturn(true);
+        when(tokenBlacklistService.isTokenBlacklisted(oldRefreshToken)).thenReturn(false);
+        when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
+        when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldAccessToken))
+                .thenReturn(System.currentTimeMillis() - 1000);
+        long refreshExpiry = System.currentTimeMillis() + 60000;
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldRefreshToken)).thenReturn(refreshExpiry);
+
+        authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
+
+        // The refresh token that was exchanged must not stay usable
+        org.mockito.Mockito.verify(tokenBlacklistService)
+                .blacklistToken(eq(oldRefreshToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
+    }
+
+    @Test
+    void testRefreshToken_ShouldRevokeTheAccessTokenItReplaces() {
+        String oldAccessToken = "old-access-token";
+        String oldRefreshToken = "old-refresh-token";
+
+        when(jwtService.isRefreshToken(oldRefreshToken)).thenReturn(true);
+        when(tokenBlacklistService.isTokenBlacklisted(oldRefreshToken)).thenReturn(false);
+        when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
+        when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldAccessToken))
+                .thenReturn(System.currentTimeMillis() + 60000);
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldRefreshToken))
+                .thenReturn(System.currentTimeMillis() + 60000);
+
+        authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
+
+        org.mockito.Mockito.verify(tokenBlacklistService)
+                .blacklistToken(eq(oldAccessToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
+    }
+
+    @Test
+    void testRefreshToken_ShouldSucceedWhenRevocationFails() {
+        String oldAccessToken = "old-access-token";
+        String oldRefreshToken = "old-refresh-token";
+
+        when(jwtService.isRefreshToken(oldRefreshToken)).thenReturn(true);
+        when(tokenBlacklistService.isTokenBlacklisted(oldRefreshToken)).thenReturn(false);
+        when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
+        when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        // Redis is unreachable while the token is being revoked
+        when(jwtService.getExpirationFromTokenAllowingExpired(any(String.class)))
+                .thenThrow(new RuntimeException("Redis is down"));
+
+        Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
+
+        assertThat(response.get("accessToken")).isEqualTo("new-access-token");
     }
 
     @Test
@@ -277,13 +350,35 @@ class AuthenticationServiceTest {
         String refreshToken = "refresh-token";
 
         when(jwtService.extractUsername(accessToken)).thenReturn("test@example.com");
-        when(jwtService.getExpirationFromToken(accessToken))
+        when(jwtService.getExpirationFromTokenAllowingExpired(accessToken))
                 .thenReturn(System.currentTimeMillis() + 100000);
-        when(jwtService.getExpirationFromToken(refreshToken))
+        when(jwtService.getExpirationFromTokenAllowingExpired(refreshToken))
                 .thenReturn(System.currentTimeMillis() + 100000);
 
         assertThatCode(() -> authenticationService.logout(accessToken, refreshToken))
                 .doesNotThrowAnyException();
+
+        org.mockito.Mockito.verify(tokenBlacklistService)
+                .blacklistToken(eq(accessToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
+        org.mockito.Mockito.verify(tokenBlacklistService)
+                .blacklistToken(eq(refreshToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
+    }
+
+    @Test
+    void testLogout_ShouldRevokeRefreshTokenEvenWhenAccessTokenExpired() {
+        String expiredAccessToken = "expired-access-token";
+        String refreshToken = "refresh-token";
+
+        when(jwtService.extractUsername(expiredAccessToken))
+                .thenThrow(new io.jsonwebtoken.ExpiredJwtException(null, null, "expired"));
+        when(jwtService.getExpirationFromTokenAllowingExpired(refreshToken))
+                .thenReturn(System.currentTimeMillis() + 100000);
+
+        assertThatCode(() -> authenticationService.logout(expiredAccessToken, refreshToken))
+                .doesNotThrowAnyException();
+
+        org.mockito.Mockito.verify(tokenBlacklistService)
+                .blacklistToken(eq(refreshToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
     }
 
     @Test
