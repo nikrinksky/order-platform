@@ -2,6 +2,8 @@ package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.UserAlreadyExistsException;
+import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
@@ -125,7 +127,7 @@ class UserServiceTest {
         when(userRepository.existsByEmail("test@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.register(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("already exists");
     }
 
@@ -184,7 +186,7 @@ class UserServiceTest {
         when(userRepository.findById("999")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.updateRoles("999", Set.of(Role.ROLE_USER)))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(UserNotFoundException.class)
                 .hasMessageContaining("User not found");
     }
 

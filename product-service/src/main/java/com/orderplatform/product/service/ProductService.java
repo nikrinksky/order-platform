@@ -49,9 +49,9 @@ public class ProductService {
     /** Lists the catalogue: the published products for a visitor, everything for a privileged caller. */
     public Page<ProductResponse> findAll(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Product> products = catalogAccess.canViewHiddenProducts()
-                ? productRepository.findAll(pageable)
-                : productRepository.findByActive(true, pageable);
+        Page<Product> products = catalogAccess.canViewHiddenProducts() ?
+                productRepository.findAll(pageable) :
+                productRepository.findByActive(true, pageable);
         return products.map(this::toResponse);
     }
 
@@ -63,9 +63,9 @@ public class ProductService {
 
     public Page<ProductResponse> findByCategory(String category, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Product> products = catalogAccess.canViewHiddenProducts()
-                ? productRepository.findByCategory(category, pageable)
-                : productRepository.findByCategoryAndActive(category, true, pageable);
+        Page<Product> products = catalogAccess.canViewHiddenProducts() ?
+                productRepository.findByCategory(category, pageable) :
+                productRepository.findByCategoryAndActive(category, true, pageable);
         return products.map(this::toResponse);
     }
 
@@ -74,16 +74,16 @@ public class ProductService {
         // The user string is a literal to search for, not a regular expression: escape it so that
         // ".*" or a nested quantifier cannot be used to dump or stall the collection.
         String escaped = escapeRegex(text);
-        Page<Product> products = catalogAccess.canViewHiddenProducts()
-                ? productRepository.searchByText(escaped, pageable)
-                : productRepository.searchActiveByText(escaped, pageable);
+        Page<Product> products = catalogAccess.canViewHiddenProducts() ?
+                productRepository.searchByText(escaped, pageable) :
+                productRepository.searchActiveByText(escaped, pageable);
         return products.map(this::toResponse);
     }
 
     public List<ProductResponse> findByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        List<Product> products = catalogAccess.canViewHiddenProducts()
-                ? productRepository.findByPriceRangeIncludingHidden(minPrice, maxPrice)
-                : productRepository.findByPriceRange(minPrice, maxPrice);
+        List<Product> products = catalogAccess.canViewHiddenProducts() ?
+                productRepository.findByPriceRangeIncludingHidden(minPrice, maxPrice) :
+                productRepository.findByPriceRange(minPrice, maxPrice);
         return products.stream()
                 .map(this::toResponse)
                 .toList();

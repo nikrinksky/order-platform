@@ -1,20 +1,17 @@
 spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+  # The datasource is a PostgreSQL Testcontainer, contributed by AbstractUserIntegrationTest.
   jpa:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
   kafka:
     enabled: false
-  security:
-    enabled: false
+  main:
+    # The test security configuration replaces the production one, so the context has to allow a
+    # bean definition to win over the one from the application.
+    allow-bean-definition-overriding: true
+
 # The tests run without Redis, and the blacklist lookup would only add connection noise there.
 security:
   token-blacklist:
     enabled: false
-  main:
-    allow-bean-definition-overriding: true

@@ -52,7 +52,7 @@ public class JwtService {
      */
     public boolean isValidAccessToken(String token) {
         try {
-            Claims claims = parseToken(token);
+            final Claims claims = parseToken(token);
             if (!"access".equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
                 return false;
             }
@@ -90,7 +90,7 @@ public class JwtService {
      */
     @SuppressWarnings("unchecked")
     public List<String> extractRoles(String token) {
-        List<String> roles = parseToken(token).get(ROLES_CLAIM, List.class);
+        final List<String> roles = parseToken(token).get(ROLES_CLAIM, List.class);
         return roles != null ? roles : List.of();
     }
 

@@ -81,29 +81,22 @@ docker compose --profile dev up -d
 
 ### Локальное тестирование (Windows)
 
-Для запуска интеграционных тестов локально на Windows:
+Интеграционные тесты поднимают собственные контейнеры (Testcontainers), поэтому внешняя база для
+них не нужна - достаточно запущенного Docker Desktop:
 
-1. Убедитесь что Docker Desktop запущен и контейнеры доступны:
-   ```powershell
-   docker ps
-   ```
+```powershell
+# Unit-тесты
+.\mvnw.cmd test
 
-2. Запустите необходимые контейнеры через docker-compose (если не запущены):
-   ```powershell
-   docker-compose up -d postgres redis
-   ```
+# Unit + интеграционные тесты на реальных Postgres/MongoDB
+.\mvnw.cmd verify -Pintegration-tests
+```
 
-3. Запустите тесты через Maven:
-   ```powershell
-   # Все тесты
-   .\mvnw.cmd test
-   
-   # Только интеграционные тесты
-   .\mvnw.cmd test -Dtest=AuthIntegrationTest
-   ```
+Профиль `integration-tests` обязателен: без него `skipITs=true` и failsafe-тесты пропускаются.
 
-**Примечание:** На Windows может потребоваться корректная настройка Docker Desktop.
-Если Testcontainers не может подключиться к Docker, тесты будут использовать внешние контейнеры из docker-compose.
+**Примечание:** На Windows нужен корректно настроенный Docker Desktop - Testcontainers работает
+через его pipe. Внешние контейнеры из docker-compose больше не используются: тесты всегда поднимают
+свои, чтобы результат не зависел от того, что уже запущено на машине.
 
 ### CI тестирование (Linux)
 
@@ -132,16 +125,14 @@ Testcontainers на Linux работают без проблем через Unix
    - Нажмите **Test Connection** для проверки
 3. Запустите тесты через IDE (Run → Run...)
 
-**Вариант 3: Использование docker-compose для тестов**
+**Вариант 3: Только unit-тесты**
 
-Если IntelliJ IDEA не может подключиться к Docker, можно:
+Интеграционным тестам нужен Docker (Testcontainers поднимает Postgres/MongoDB сам). Если Docker
+недоступен, запускайте unit-тесты: они работают на встроенной H2 и внешних сервисов не требуют.
 
-1. Запустить необходимые контейнеры через docker-compose:
-   ```powershell
-   docker-compose up -d postgres redis
-   ```
-
-2. Запустить тесты через IDE - они будут использовать внешние контейнеры
+```powershell
+.\mvnw.cmd test
+```
 
 Для подробной информации см. [IDEA_DOCKER_SETUP.md](IDEA_DOCKER_SETUP.md)
 
@@ -167,6 +158,10 @@ Testcontainers на Linux работают без проблем через Unix
 - `SPRING_DATASOURCE_URL` - JDBC URL для PostgreSQL
 - `SPRING_DATA_REDIS_HOST` - хост Redis
 - `SPRING_KAFKA_BOOTSTRAP_SERVERS` - сервер Kafka (redpanda:9092 в Docker)
+- `NOTIFICATION_EMAIL_ENABLED` - отправлять ли письма из notification-service. По умолчанию `false`
+  (локальный запуск без почтового сервера), в `docker-compose` включено и письма уходят в MailHog
+- `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` - SMTP-сервер для notification-service
+  (`mailhog:1025` в Docker)
 
 ## Порталы и инструменты
 
@@ -180,6 +175,7 @@ Testcontainers на Linux работают без проблем через Unix
 | pgAdmin | http://localhost:5050 | admin@orderplatform.com | admin |
 | mongo-express | http://localhost:8087 | admin | admin |
 | redis-commander | http://localhost:8088 | - | - |
+| MailHog (письма notification-service) | http://localhost:8025 | - | - |
 
 ## Базы данных
 

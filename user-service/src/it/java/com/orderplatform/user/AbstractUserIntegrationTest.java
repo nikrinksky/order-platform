@@ -10,6 +10,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.testcontainers.containers.PostgreSQLContainer;
 
 @TestPropertySource(properties = {
     "spring.kafka.enabled=false",
@@ -28,12 +29,27 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @Import(TestSecurityConfig.class)
 public abstract class AbstractUserIntegrationTest {
 
+    /**
+     * A real PostgreSQL, not H2: the profile is built on PostgreSQL specifics (the
+     * {@code user_profile} schema, row locking), and a test on another engine cannot prove the
+     * queries work in production. One container per JVM, started before the shared context.
+     */
+    protected static final PostgreSQLContainer<?> POSTGRES =
+            new PostgreSQLContainer<>("postgres:15-alpine")
+                    .withDatabaseName("userdb")
+                    .withUsername("userplatform")
+                    .withPassword("dev123");
+
+    static {
+        POSTGRES.start();
+    }
+
     @DynamicPropertySource
     static void configureTestProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE");
-        registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
-        registry.add("spring.datasource.username", () -> "sa");
-        registry.add("spring.datasource.password", () -> "");
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
     }
 }

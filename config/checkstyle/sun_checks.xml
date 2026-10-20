@@ -5,7 +5,15 @@
 
 <module name="Checker">
     <property name="charset" value="UTF-8"/>
-    <property name="severity" value="warning"/>
+    <!--
+      Default severity is error, so a rule added here is enforced by `mvn checkstyle:check` (the CI
+      gate) unless it is explicitly marked down to warning below. The previous default of warning
+      meant every rule was advisory: violations were printed and the build stayed green.
+      Rules marked warning are the ones a formatter cannot settle and that would otherwise force
+      noise edits on every change - local variable modifiers, magic numbers, return counts,
+      whitespace placement. They are still reported, they just do not fail the build.
+    -->
+    <property name="severity" value="error"/>
 
     <!-- Skip generated sources -->
     <module name="BeforeExecutionExclusionFileFilter">
@@ -21,9 +29,12 @@
     <module name="TreeWalker">
         <!-- Annotations -->
         <module name="AnnotationLocation">
+            <property name="severity" value="warning"/>
             <property name="tokens" value="CLASS_DEF, ENUM_DEF, INTERFACE_DEF, RECORD_DEF, ENUM_CONSTANT_DEF"/>
         </module>
-        <module name="AnnotationUseStyle"/>
+        <module name="AnnotationUseStyle">
+            <property name="severity" value="warning"/>
+        </module>
 
         <!-- Coding -->
         <module name="AvoidStarImport"/>
@@ -31,7 +42,9 @@
         <module name="AvoidEscapedUnicodeCharacters">
             <property name="allowByTailComment" value="true"/>
         </module>
-        <module name="ClassTypeParameterName"/>
+        <module name="ClassTypeParameterName">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="DefaultComesLast"/>
         <module name="EmptyBlock">
             <property name="option" value="text"/>
@@ -41,10 +54,15 @@
         </module>
         <module name="EmptyStatement"/>
         <module name="EqualsHashCode"/>
-        <module name="ExplicitInitialization"/>
+        <module name="ExplicitInitialization">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="FallThrough"/>
-        <module name="FinalLocalVariable"/>
+        <module name="FinalLocalVariable">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="HiddenField">
+            <property name="severity" value="warning"/>
             <property name="ignoreConstructorParameter" value="true"/>
             <property name="ignoreSetter" value="true"/>
         </module>
@@ -54,6 +72,7 @@
         <module name="InnerAssignment"/>
         <module name="InterfaceIsType"/>
         <module name="MagicNumber">
+            <property name="severity" value="warning"/>
             <property name="ignoreHashCodeMethod" value="true"/>
             <property name="ignoreAnnotation" value="true"/>
             <property name="ignoreNumbers" value="-1, 0, 1, 2"/>
@@ -62,16 +81,22 @@
         <module name="ModifiedControlVariable"/>
         <module name="MultipleVariableDeclarations"/>
         <module name="NestedForDepth">
+            <property name="severity" value="warning"/>
             <property name="max" value="3"/>
         </module>
-        <module name="NestedTryDepth"/>
+        <module name="NestedTryDepth">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="NoClone"/>
         <module name="NoFinalizer"/>
         <module name="OneStatementPerLine"/>
         <module name="OuterTypeFilename"/>
         <module name="PackageDeclaration"/>
-        <module name="ParameterAssignment"/>
+        <module name="ParameterAssignment">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="ReturnCount">
+            <property name="severity" value="warning"/>
             <property name="max" value="4"/>
             <property name="maxForVoid" value="2"/>
         </module>
@@ -88,42 +113,73 @@
         <module name="DesignForExtension">
             <property name="severity" value="ignore"/>
         </module>
-        <module name="InnerTypeLast"/>
-        <module name="MutableException"/>
+        <module name="InnerTypeLast">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="MutableException">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="ThrowsCount">
+            <property name="severity" value="warning"/>
             <property name="max" value="3"/>
         </module>
         <module name="VisibilityModifier">
+            <property name="severity" value="warning"/>
             <property name="protectedAllowed" value="true"/>
             <property name="allowPublicFinalFields" value="true"/>
         </module>
 
         <!-- Whitespace -->
-        <module name="EmptyForInitializerPad"/>
-        <module name="EmptyForIteratorPad"/>
-        <module name="GenericWhitespace"/>
-        <module name="MethodParamPad"/>
-        <module name="NoLineWrap"/>
+        <module name="EmptyForInitializerPad">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="EmptyForIteratorPad">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="GenericWhitespace">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="MethodParamPad">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="NoLineWrap">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="NoWhitespaceAfter">
+            <property name="severity" value="warning"/>
             <property name="tokens" value="BNOT, DEC, DOT, INC, LNOT, UNARY_MINUS, UNARY_PLUS"/>
         </module>
-        <module name="NoWhitespaceBefore"/>
-        <module name="NoWhitespaceBeforeCaseDefaultColon"/>
+        <module name="NoWhitespaceBefore">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="NoWhitespaceBeforeCaseDefaultColon">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="OperatorWrap">
             <property name="option" value="eol"/>
         </module>
-        <module name="ParenPad"/>
+        <module name="ParenPad">
+            <property name="severity" value="warning"/>
+        </module>
         <module name="SeparatorWrap">
+            <property name="severity" value="warning"/>
             <property name="tokens" value="DOT, AT"/>
             <property name="option" value="nl"/>
         </module>
         <module name="SeparatorWrap">
+            <property name="severity" value="warning"/>
             <property name="tokens" value="COMMA"/>
             <property name="option" value="EOL"/>
         </module>
-        <module name="TypecastParenPad"/>
-        <module name="WhitespaceAfter"/>
-        <module name="WhitespaceAround"/>
+        <module name="TypecastParenPad">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="WhitespaceAfter">
+            <property name="severity" value="warning"/>
+        </module>
+        <module name="WhitespaceAround">
+            <property name="severity" value="warning"/>
+        </module>
 
         <!-- Imports -->
         <module name="AvoidStaticImport">

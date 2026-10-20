@@ -1,18 +1,9 @@
 spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+  # The datasource is a PostgreSQL Testcontainer, contributed by AbstractInventoryIntegrationTest.
   jpa:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
-    # The main configuration pins the PostgreSQL dialect; on the in-memory H2 database it made
-    # Hibernate emit PostgreSQL-only locking syntax ("for no key update") that H2 rejects.
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
   kafka:
     enabled: false
 # The tests run without Redis, and the blacklist lookup would only add connection noise there.

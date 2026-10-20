@@ -62,11 +62,11 @@ public class OutboxAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public EventPayloadCodec outboxEventPayloadCodec(OutboxProperties properties) {
-        Map<String, Class<? extends SpecificRecordBase>> eventTypes = new LinkedHashMap<>();
+        final Map<String, Class<? extends SpecificRecordBase>> eventTypes = new LinkedHashMap<>();
         properties.getEvents().forEach((schema, className) -> eventTypes.put(schema, load(schema, className)));
         if (eventTypes.isEmpty()) {
-            log.warn("outbox.events is empty: the relay cannot publish anything until the event "
-                    + "classes are listed there");
+            log.warn("outbox.events is empty: the relay cannot publish anything until the event " +
+                    "classes are listed there");
         }
         return new EventPayloadCodec(eventTypes);
     }
@@ -109,15 +109,15 @@ public class OutboxAutoConfiguration {
 
     private static Class<? extends SpecificRecordBase> load(String schema, String className) {
         try {
-            Class<?> type = Class.forName(className);
+            final Class<?> type = Class.forName(className);
             if (!SpecificRecordBase.class.isAssignableFrom(type)) {
-                throw new IllegalStateException("Event type '" + schema + "' (" + className
-                        + ") must extend SpecificRecordBase to be published through the outbox");
+                throw new IllegalStateException("Event type '" + schema + "' (" + className +
+                        ") must extend SpecificRecordBase to be published through the outbox");
             }
             return type.asSubclass(SpecificRecordBase.class);
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("Event type '" + schema + "' points at a class that is "
-                    + "not on the classpath: " + className, e);
+            throw new IllegalStateException("Event type '" + schema + "' points at a class that is " +
+                    "not on the classpath: " + className, e);
         }
     }
 }

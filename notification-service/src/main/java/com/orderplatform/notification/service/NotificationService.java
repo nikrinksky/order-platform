@@ -3,7 +3,9 @@ package com.orderplatform.notification.service;
 import com.orderplatform.events.order.OrderCreatedEvent;
 import com.orderplatform.events.order.OrderStatusChangedEvent;
 import com.orderplatform.notification.model.Notification;
+import com.orderplatform.notification.model.UserContact;
 import com.orderplatform.notification.repository.NotificationRepository;
+import com.orderplatform.notification.repository.UserContactRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,8 @@ import java.time.LocalDateTime;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final UserContactRepository userContactRepository;
+    private final EmailSender emailSender;
 
     /**
      * Stores the notification for a created order.
@@ -34,13 +38,13 @@ public class NotificationService {
         }
         log.info("Processing order created event for order: {}", event.getOrderId());
 
-        Notification notification = Notification.builder()
+        final Notification notification = Notification.builder()
                 .userId(text(event.getUserId()))
                 .eventId(eventId)
                 .type("ORDER_CREATED")
                 .subject("Order Created: " + text(event.getOrderNumber()))
-                .body("Your order " + text(event.getOrderNumber()) + " with total amount $"
-                        + decimal(event.getTotalAmount()) + " has been created.")
+                .body("Your order " + text(event.getOrderNumber()) + " with total amount $" +
+                        decimal(event.getTotalAmount()) + " has been created.")
                 .channel("EMAIL")
                 .sent(false)
                 .createdAt(LocalDateTime.now())
@@ -48,6 +52,7 @@ public class NotificationService {
 
         notificationRepository.save(notification);
         log.info("Notification created for order: {}", event.getOrderId());
+        deliver(notification);
     }
 
     @Transactional
@@ -57,13 +62,13 @@ public class NotificationService {
         }
         log.info("Processing order status changed event for order: {}", event.getOrderId());
 
-        Notification notification = Notification.builder()
+        final Notification notification = Notification.builder()
                 .userId(text(event.getUserId()))
                 .eventId(eventId)
                 .type("ORDER_STATUS_CHANGED")
                 .subject("Order Status: " + text(event.getStatus()))
-                .body("Your order " + text(event.getOrderNumber()) + " status has been updated to "
-                        + text(event.getStatus()) + ".")
+                .body("Your order " + text(event.getOrderNumber()) + " status has been updated to " +
+                        text(event.getStatus()) + ".")
                 .channel("EMAIL")
                 .sent(false)
                 .createdAt(LocalDateTime.now())
@@ -71,6 +76,50 @@ public class NotificationService {
 
         notificationRepository.save(notification);
         log.info("Notification created for status change: {}", event.getOrderId());
+        deliver(notification);
+    }
+
+    /**
+     * Sends the notification to its recipient and records that it went out.
+     *
+     * <p>Sent straight from the consumer rather than handed to a background job: the caller
+     * acknowledges the Kafka offset only after this returns, so a failure keeps the event on the
+     * topic and the retry redelivers it. Marking the notification sent is the last step - a
+     * notification that could not be handed to the mail server stays unsent and is visible as
+     * such.
+     *
+     * <p>When no address is known the notification is stored unsent and logged instead of being
+     * dropped: the contact projection may simply not have caught up yet, and the record still has
+     * to be readable in the notification history.
+     *
+     * @param notification the stored notification to deliver
+     * @throws RuntimeException when the mail server rejects the message, so the delivery is
+     *                          retried rather than silently reported as done
+     */
+    private void deliver(Notification notification) {
+        String email = addressOf(notification.getUserId());
+        if (email == null) {
+            log.warn("No email known for user {}, notification {} stays unsent",
+                    notification.getUserId(), notification.getId());
+            return;
+        }
+
+        emailSender.send(email, notification.getSubject(), notification.getBody());
+
+        notification.setSent(true);
+        notification.setSentAt(LocalDateTime.now());
+        notificationRepository.save(notification);
+        log.info("Notification {} sent to {}", notification.getId(), email);
+    }
+
+    private String addressOf(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        return userContactRepository.findById(userId)
+                .map(UserContact::getEmail)
+                .filter(email -> !email.isBlank())
+                .orElse(null);
     }
 
     /**

@@ -6,6 +6,8 @@ package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.UserAlreadyExistsException;
+import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
@@ -58,7 +60,7 @@ public class UserService {
     public UserDto register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             String msg = "User with email " + request.getEmail() + " already exists";
-            throw new RuntimeException(msg);
+            throw new UserAlreadyExistsException(msg);
         }
 
         User user = User.builder()
@@ -87,7 +89,7 @@ public class UserService {
     @Transactional
     public UserDto updateUser(String userId, RegisterRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
 
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
@@ -112,7 +114,7 @@ public class UserService {
     @Transactional
     public UserDto updateRoles(String userId, Set<Role> roles) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
 
         user.setRoles(roles);
 

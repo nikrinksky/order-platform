@@ -87,15 +87,15 @@ public class OutboxRelay {
     }
 
     private void handleFailure(OutboxClaim claim, Exception cause) {
-        OutboxProperties.Retry retry = properties.getRetry();
-        DeadLetterPublisher deadLetter = deadLetterPublisher.getIfAvailable();
+        final OutboxProperties.Retry retry = properties.getRetry();
+        final DeadLetterPublisher deadLetter = deadLetterPublisher.getIfAvailable();
 
-        if (claim.attempts() >= retry.getMaxTotalAttempts() || deadLetter == null
-                && claim.attempts() >= retry.getMaxAttempts()) {
+        if (claim.attempts() >= retry.getMaxTotalAttempts() || deadLetter == null &&
+                claim.attempts() >= retry.getMaxAttempts()) {
             deadLetterRecord(claim, cause, deadLetter);
             return;
         }
-        long backoff = backoffMillis(claim.attempts(), retry);
+        final long backoff = backoffMillis(claim.attempts(), retry);
         claimOperations.executeWithoutResult(status -> repository.findById(claim.id())
                 .ifPresent(record -> record.scheduleRetry(backoff, describe(cause))));
     }
@@ -109,7 +109,7 @@ public class OutboxRelay {
                 // dropping the event; it will keep retrying until the DLQ or the broker recovers.
                 log.error("Dead letter delivery failed for outbox record {}, keeping it for retry",
                         claim.id(), dlqFailure);
-                long backoff = backoffMillis(claim.attempts(), properties.getRetry());
+                final long backoff = backoffMillis(claim.attempts(), properties.getRetry());
                 claimOperations.executeWithoutResult(status -> repository.findById(claim.id())
                         .ifPresent(record -> record.scheduleRetry(backoff, describe(dlqFailure))));
                 return;
@@ -126,15 +126,15 @@ public class OutboxRelay {
      * restart of the relay does not reset the growth.
      */
     private long backoffMillis(long attempt, OutboxProperties.Retry retry) {
-        double exponential = retry.getInitialBackoffMs()
-                * Math.pow(retry.getMultiplier(), Math.max(0, attempt - 1));
-        long capped = (long) Math.min(exponential, retry.getMaxBackoffMs());
-        double jitter = 1.0 + (Math.random() * 2 - 1) * retry.getJitter();
+        final double exponential = retry.getInitialBackoffMs() *
+                Math.pow(retry.getMultiplier(), Math.max(0, attempt - 1));
+        final long capped = (long) Math.min(exponential, retry.getMaxBackoffMs());
+        final double jitter = 1.0 + (Math.random() * 2 - 1) * retry.getJitter();
         return Math.max(1, (long) (capped * jitter));
     }
 
     private OutboxMessage toMessage(OutboxRecord record) {
-        return new OutboxMessage(record.getId(), record.getTopic(), record.getAggregateId(),
+        return new OutboxMessage(record.getEventId(), record.getTopic(), record.getAggregateId(),
                 record.getEventType(), record.getPayload(), record.getAttempts());
     }
 

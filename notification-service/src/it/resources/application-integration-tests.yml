@@ -1,19 +1,9 @@
-de:
-  flapdoodle:
-    mongodb:
-      embedded:
-        version: 7.0.4
-
 spring:
+  # The connection is a MongoDB Testcontainer, contributed by AbstractNotificationIntegrationTest.
   kafka:
     enabled: false
   security:
     enabled: false
-  data:
-    mongodb:
-      host: localhost
-      port: 0
-      database: notificationdb
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration

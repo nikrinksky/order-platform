@@ -116,7 +116,7 @@ public class InventoryService {
         item.setAvailable(quantity > 0);
         item.setUpdatedAt(LocalDateTime.now());
         inventoryItemRepository.save(item);
-        
+
         log.info("Created/Updated inventory for product {}: quantity={}", productId, quantity);
         return item;
     }

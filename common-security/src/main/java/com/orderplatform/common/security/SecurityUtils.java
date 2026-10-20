@@ -22,9 +22,9 @@ public final class SecurityUtils {
      * @throws IllegalStateException if no authenticated user is present
      */
     public static String getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-                || authentication instanceof AnonymousAuthenticationToken) {
+        final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() ||
+                authentication instanceof AnonymousAuthenticationToken) {
             throw new IllegalStateException("User is not authenticated");
         }
         return authentication.getName();
