@@ -65,8 +65,8 @@ public class OrderService {
         for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
             if (!inventoryClient.hasStock(itemReq.getProductId(), itemReq.getQuantity())) {
                 throw new IllegalArgumentException(
-                        "Insufficient inventory for product " + itemReq.getProductId()
-                                + " (requested: " + itemReq.getQuantity() + ")");
+                        "Insufficient inventory for product " + itemReq.getProductId() +
+                                " (requested: " + itemReq.getQuantity() + ")");
             }
         }
 
@@ -207,9 +207,9 @@ public class OrderService {
 
     /** Whether an order in this status still holds stock reserved in inventory. */
     private static boolean holdsReservation(OrderStatus status) {
-        return status == OrderStatus.RESERVED
-                || status == OrderStatus.PAID
-                || status == OrderStatus.SHIPPED;
+        return status == OrderStatus.RESERVED ||
+                status == OrderStatus.PAID ||
+                status == OrderStatus.SHIPPED;
     }
 
     public OrderResponse findById(String orderId) {

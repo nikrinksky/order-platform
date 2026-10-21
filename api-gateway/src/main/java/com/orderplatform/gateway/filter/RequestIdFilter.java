@@ -14,11 +14,11 @@ public class RequestIdFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        String requestId = UUID.randomUUID().toString();
-        exchange = exchange.mutate()
+        final String requestId = UUID.randomUUID().toString();
+        final ServerWebExchange withRequestId = exchange.mutate()
                 .request(r -> r.header("X-Request-Id", requestId))
                 .build();
-        return chain.filter(exchange);
+        return chain.filter(withRequestId);
     }
 
     @Override

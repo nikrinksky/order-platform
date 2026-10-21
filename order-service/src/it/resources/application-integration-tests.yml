@@ -1,9 +1,5 @@
 spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;NON_KEYWORDS=ORDERS,ORDER,USER,KEY
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+  # The datasource is a PostgreSQL Testcontainer, contributed by AbstractOrderIntegrationTest.
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -11,7 +7,6 @@ spring:
     properties:
       hibernate:
         default_schema: public
-        dialect: org.hibernate.dialect.H2Dialect
   kafka:
     enabled: false
 # The tests run without Redis, and the blacklist lookup would only add connection noise there.

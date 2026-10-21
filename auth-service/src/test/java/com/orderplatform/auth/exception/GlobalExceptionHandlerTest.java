@@ -47,4 +47,38 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         assertEquals("Forbidden", response.getBody().get("error"));
     }
+
+    @Test
+    void handleUserNotFound_shouldReturnNotFound() {
+        UserNotFoundException ex = new UserNotFoundException("User not found with id: 999");
+
+        ResponseEntity<Map<String, String>> response = handler.handleUserNotFound(ex);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertTrue(response.getBody().get("error").contains("999"));
+    }
+
+    @Test
+    void handleUserAlreadyExists_shouldReturnBadRequest() {
+        UserAlreadyExistsException ex = new UserAlreadyExistsException("already exists");
+
+        ResponseEntity<Map<String, String>> response = handler.handleUserAlreadyExists(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(response.getBody().get("error").contains("already exists"));
+    }
+
+    /**
+     * The dedicated types must be picked before the generic handler, otherwise a missing user
+     * would be answered with 409 and a duplicate email with 409 as well.
+     */
+    @Test
+    void dedicatedHandlers_areMoreSpecificThanTheGenericOne() {
+        assertTrue(RuntimeException.class.isAssignableFrom(UserNotFoundException.class));
+        assertTrue(RuntimeException.class.isAssignableFrom(UserAlreadyExistsException.class));
+        assertEquals(HttpStatus.NOT_FOUND,
+                handler.handleUserNotFound(new UserNotFoundException("x")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,
+                handler.handleUserAlreadyExists(new UserAlreadyExistsException("x")).getStatusCode());
+    }
 }

@@ -60,28 +60,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String token = authHeader.substring(BEARER_PREFIX_LENGTH);
 
         try {
-            if (!jwtService.isValidAccessToken(token)) {
-                log.warn("Invalid or expired access token on {} {}", request.getMethod(),
-                        request.getRequestURI());
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+            final String rejection = rejectionReason(token, request);
+            if (rejection != null) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, rejection);
                 return;
             }
 
-            if (isRevoked(token)) {
-                log.warn("Revoked access token on {} {}", request.getMethod(),
-                        request.getRequestURI());
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
-                return;
-            }
-
-            String userId = jwtService.extractUserId(token);
-            List<String> roles = jwtService.extractRoles(token);
-            List<GrantedAuthority> authorities = roles.stream()
+            final String userId = jwtService.extractUserId(token);
+            final List<String> roles = jwtService.extractRoles(token);
+            final List<GrantedAuthority> authorities = roles.stream()
                     .map(SimpleGrantedAuthority::new)
                     .map(GrantedAuthority.class::cast)
                     .toList();
 
-            UsernamePasswordAuthenticationToken authentication =
+            final UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(userId, null, authorities);
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -94,13 +86,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
+     * Decides whether the token has to be rejected, so the filter itself keeps a single decision
+     * point instead of returning from several branches.
+     *
+     * @param token   the access token to check
+     * @param request the request, used for the log line
+     * @return the message to answer with, or null when the token is acceptable
+     */
+    private String rejectionReason(String token, HttpServletRequest request) {
+        if (!jwtService.isValidAccessToken(token)) {
+            log.warn("Invalid or expired access token on {} {}", request.getMethod(),
+                    request.getRequestURI());
+            return "Invalid or expired token";
+        }
+        if (isRevoked(token)) {
+            log.warn("Revoked access token on {} {}", request.getMethod(),
+                    request.getRequestURI());
+            return "Token has been revoked";
+        }
+        return null;
+    }
+
+    /**
      * Consults the blacklist when the service has one configured.
      *
      * @param token the access token to check
      * @return true when the token has been revoked
      */
     private boolean isRevoked(String token) {
-        TokenBlacklistChecker checker = tokenBlacklistChecker.getIfAvailable();
+        final TokenBlacklistChecker checker = tokenBlacklistChecker.getIfAvailable();
         return checker != null && checker.isBlacklisted(token);
     }
 }

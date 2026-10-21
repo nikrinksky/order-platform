@@ -22,7 +22,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @ExtendWith(SpringExtension.class)
 @AutoConfigureMockMvc
 @Import(TestSecurityConfig.class)
-public abstract class AbstractInventoryIntegrationTest {
+public abstract class AbstractInventoryIntegrationTest extends AbstractInventoryDatabaseTest {
 
     @MockitoBean
     protected KafkaTemplate<String, Object> kafkaTemplate;

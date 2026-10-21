@@ -18,12 +18,15 @@ profile:
 #  - name: <SomeEnabledInspectionId>
 
 #Disable inspections
-#exclude:
-#  - name: <SomeDisabledInspectionId>
-#    paths:
-#      - <path/where/not/run/inspection>
+exclude:
+  # False positive: StringRedisTemplate.hasKey is declared as @Nullable Boolean, so the null check
+  # is what keeps a missing key from being unboxed. Verified against the compiled signature.
+  - name: PointlessBooleanExpression
+    paths:
+      - common-security/src/main/java/com/orderplatform/common/security/RedisTokenBlacklistChecker.java
 
-projectJDK: "21" #(Applied in CI/CD pipeline)
+# Matches <source>/<target> in the root pom: the project is built for Java 17.
+projectJDK: "17" #(Applied in CI/CD pipeline)
 
 #Execute shell command before Qodana execution (Applied in CI/CD pipeline)
 #bootstrap: sh ./prepare-qodana.sh
@@ -36,13 +39,15 @@ projectJDK: "21" #(Applied in CI/CD pipeline)
 # severityThresholds - configures maximum thresholds for different problem severities
 # testCoverageThresholds - configures minimum code coverage on a whole project and newly added code
 # Code Coverage is available in Ultimate and Ultimate Plus plans
-#failureConditions:
-#  severityThresholds:
-#    any: 15
-#    critical: 5
-#  testCoverageThresholds:
-#    fresh: 70
-#    total: 50
+#
+# The gate is set to catch regressions rather than to demand a clean report: a new critical or
+# high finding fails the run immediately, while the remaining budget absorbs the moderate and
+# informational findings the starter profile already reports.
+failureConditions:
+  severityThresholds:
+    critical: 0
+    high: 10
+    any: 100
   
 #Qodana supports other languages, for example, Python, JavaScript, TypeScript, Go, C#, PHP
 #For all supported languages see https://www.jetbrains.com/help/qodana/linters.html

@@ -13,8 +13,19 @@ import lombok.Getter;
 @AllArgsConstructor
 public class OutboxMessage {
 
-    /** Outbox row id; doubles as the delivery id, see {@link #getEventId()}. */
-    private final Long id;
+    /**
+     * Identifier a consumer de-duplicates on, taken from the outbox {@code event_id} column.
+     *
+     * <p>It is the <em>business</em> key the producer chose - {@code order-1:CREATED}, for
+     * instance - and not the surrogate row id. Consumers correlate an event with the operation that
+     * produced it from this value alone, and a row id would tell them nothing: it is assigned by
+     * this service's own sequence and changes on every append.
+     *
+     * <p>Stability across redeliveries is what makes it usable as a de-duplication key: the relay
+     * republishes the same row, so a redelivery always carries the same value, and the unique
+     * {@code event_id} column keeps the same business event from being appended twice.
+     */
+    private final String eventId;
 
     private final String topic;
 
@@ -27,21 +38,9 @@ public class OutboxMessage {
 
     private final int attempts;
 
-    /**
-     * Identifier a consumer de-duplicates on.
-     *
-     * <p>It is the outbox row id rather than a hash of the payload: the relay republishes the same
-     * row, so a redelivery always carries the same value, while two different events never share
-     * one. The unique {@code event_id} column covers the other half - it keeps the same business
-     * event from being appended twice.
-     */
-    public String getEventId() {
-        return id == null ? null : Long.toString(id);
-    }
-
     @Override
     public String toString() {
-        return "OutboxMessage[id=" + id + ", topic=" + topic + ", eventKey=" + eventKey
-                + ", eventType=" + eventType + ", attempts=" + attempts + "]";
+        return "OutboxMessage[eventId=" + eventId + ", topic=" + topic + ", eventKey=" + eventKey +
+                ", eventType=" + eventType + ", attempts=" + attempts + "]";
     }
 }

@@ -1,5 +1,6 @@
 package com.orderplatform.inventory.integration;
 
+import com.orderplatform.inventory.AbstractInventoryDatabaseTest;
 import com.orderplatform.inventory.InventoryServiceApplication;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
@@ -26,6 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Unlike the other integration tests this one keeps the real {@code SecurityConfig} active, so
  * it exercises the actual filter chain instead of a permit-all test chain. It pins down the defect
  * where {@code /reserve} and {@code /release} were open to anonymous callers.
+ *
+ * <p>It therefore inherits only the database from {@link AbstractInventoryDatabaseTest}, not the
+ * test security configuration the other integration tests pull in.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         classes = InventoryServiceApplication.class)
@@ -35,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
         "spring.kafka.enabled=false"
 })
-class InventoryReservationSecurityIntegrationTest {
+class InventoryReservationSecurityIntegrationTest extends AbstractInventoryDatabaseTest {
 
     @MockitoBean
     private KafkaTemplate<String, Object> kafkaTemplate;

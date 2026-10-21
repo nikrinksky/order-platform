@@ -3,6 +3,8 @@ package com.orderplatform.auth.controller;
 import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.UserAlreadyExistsException;
+import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.service.AuthenticationService;
 import com.orderplatform.auth.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,7 +98,8 @@ class AuthControllerTest {
         RegisterRequest request = validRegisterRequest();
 
         when(userService.register(any(RegisterRequest.class)))
-                .thenThrow(new RuntimeException("User with email test@example.com already exists"));
+                .thenThrow(new UserAlreadyExistsException(
+                        "User with email test@example.com already exists"));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -233,7 +236,7 @@ class AuthControllerTest {
     @Test
     void testUpdateRoles_UserNotFound_ReturnsNotFound() throws Exception {
         when(userService.updateRoles(eq("999"), anySet()))
-                .thenThrow(new RuntimeException("User not found with id: 999"));
+                .thenThrow(new UserNotFoundException("User not found with id: 999"));
 
         mockMvc.perform(put("/api/auth/users/999/roles")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -30,8 +30,10 @@ jobs:
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
         with:
-          # When pr-mode is set to true, Qodana analyzes only the files that have been changed
-          pr-mode: false
+          # On a pull request only the changed files are analysed: a full scan of the whole
+          # reactor on every PR dominated the pipeline time. Pushes and manual runs still cover
+          # the whole project, so nothing escapes the weekly/full pass.
+          pr-mode: ${{ github.event_name == 'pull_request' }}
           use-caches: true
           post-pr-comment: true
           use-annotations: true

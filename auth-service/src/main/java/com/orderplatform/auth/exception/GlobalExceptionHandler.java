@@ -40,6 +40,36 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles an operation that named a user which does not exist.
+     *
+     * <p>Reported as {@code 404} rather than the {@code 409} the generic handler below would give:
+     * the request was addressed to a resource that is not there, and the caller can tell that apart
+     * from a conflict.
+     *
+     * @param ex the not-found exception
+     * @return a map with error message and HTTP 404 status
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleUserNotFound(UserNotFoundException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    /**
+     * Handles a registration that reused an existing email.
+     *
+     * @param ex the duplicate-email exception
+     * @return a map with error message and HTTP 400 status
+     */
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<Map<String, String>> handleUserAlreadyExists(UserAlreadyExistsException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
      * Handles authorization failures raised by method security ({@code @PreAuthorize}).
      *
      * <p>{@code AccessDeniedException} is a {@link RuntimeException}, so without this handler the

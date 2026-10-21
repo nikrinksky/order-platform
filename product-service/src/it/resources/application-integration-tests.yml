@@ -1,15 +1,5 @@
-de:
-  flapdoodle:
-    mongodb:
-      embedded:
-        version: 7.0.4
-
 spring:
-  data:
-    mongodb:
-      host: localhost
-      port: 0
-      database: productdb
+  # The connection is a MongoDB Testcontainer, contributed by AbstractProductIntegrationTest.
   kafka:
     bootstrap-servers: localhost:19092
     producer:

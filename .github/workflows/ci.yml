@@ -6,69 +6,22 @@ on:
     branches: [ master, dev ]
   push:
     branches: [ master ]
+  # The dependency scan is the one step too slow for a PR loop (an NVD sync is measured in hours).
+  # It keeps running weekly so a new CVE still surfaces without blocking anyone.
+  schedule:
+    - cron: '0 4 * * 1'
 
 jobs:
+  # Style and tests in one job. They used to be three separate `mvn` invocations - checkstyle,
+  # `test`, then `verify -Pintegration-tests` - which compiled the project twice and ran every
+  # unit test twice. `verify` already runs surefire and then failsafe, so one invocation covers
+  # both.
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: orderplatform
-          POSTGRES_USER: platform
-          POSTGRES_PASSWORD: dev123
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U platform -d orderplatform"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      userdb:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: userdb
-          POSTGRES_USER: userplatform
-          POSTGRES_PASSWORD: dev123
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U userplatform -d userdb"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      mongodb:
-        image: mongo:7
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: dev123
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    # No runtime connection settings here on purpose. The integration tests boot their own
-    # embedded H2 / embedded Mongo, and an environment variable outranks
-    # application-integration-tests.yml. Exporting SPRING_DATASOURCE_URL / SPRING_DATA_MONGODB_URI
-    # at job level therefore leaked into the tests and broke them (product and notification failed
-    # with Mongo 'Command delete requires authentication': the app client picked the external
-    # credentials up while flapdoodle still started an embedded server that expected its own).
+    # No service containers: the unit tests use embedded H2, and the integration tests start their
+    # own PostgreSQL / MongoDB through Testcontainers (Docker is available on the runner). The
+    # four containers declared here were started for nothing and only lengthened the job setup.
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +40,62 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Run Checkstyle
+        run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
+
+      # Retry wrapper: Maven Central occasionally returns HTTP 429 (rate limit)
+      # on bursts of downloads; a short backoff resolves transient failures.
+      #
+      # One invocation: unit tests (surefire), then integration tests on Testcontainers
+      # (failsafe). JaCoCo is skipped here - the coverage gate belongs to the packaged build, not
+      # to every PR iteration.
+      #
+      # -T 1 on purpose: .mvn/maven.config sets -T 1C, and the integration tests start their own
+      # database containers. Building several modules in parallel means several PostgreSQL and
+      # MongoDB containers starting at once, which the runner's Docker daemon does not survive
+      # ("Could not find a valid Docker environment" from Testcontainers).
+      - name: Run Tests (unit + integration)
+        run: |
+          for i in 1 2 3; do
+            mvn verify -Pintegration-tests -T 1 -Djacoco.skip=true && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "::warning::mvn verify failed (attempt $i), likely Maven Central 429 - retrying in 30s"
+            sleep 30
+          done
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+            **/target/jacoco-report/
+
+  # OWASP scan: blocking on push to master, not run on PRs at all.
+  # Rationale: NVD keeps publishing new CVEs against the EOL Spring 6.2.x /
+  # Spring Cloud 4.3.x / Spring Security 6.5.x lines (no OSS fixes until a
+  # Boot 4.x migration). New CVEs must not block PR iteration; the policy
+  # stays enforced on master pushes.
+  #
+  # A separate job on purpose: the scan needs the modules installed and takes hours, so it must
+  # not hold the test job's runner. On pull requests it used to run non-blocking, which added the
+  # same hours to every PR without ever failing it.
+  dependency-check:
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
       - name: Cache OWASP NVD database
         id: nvd-cache
         uses: actions/cache@v4
@@ -98,46 +107,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-odc-nvd-
 
-      - name: Run Checkstyle
-        run: mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
-
-      # Retry wrapper: Maven Central occasionally returns HTTP 429 (rate limit)
-      # on bursts of downloads; a short backoff resolves transient failures.
-      - name: Run Unit Tests (skip JaCoCo check for PRs)
+      # dependency-check-maven resolves the project's own modules from the local repository when
+      # it runs on the aggregator, so they have to be installed first.
+      - name: Install modules to local repo
         run: |
           for i in 1 2 3; do
-            mvn test -DskipITs=true -Djacoco.skip=true && break
-            if [ "$i" -eq 3 ]; then exit 1; fi
-            echo "::warning::mvn test failed (attempt $i), likely Maven Central 429 - retrying in 30s"
-            sleep 30
-          done
-
-      - name: Run Integration Tests
-        run: |
-          for i in 1 2 3; do
-            mvn verify -Pintegration-tests -Djacoco.skip=true && break
-            if [ "$i" -eq 3 ]; then exit 1; fi
-            echo "::warning::mvn verify failed (attempt $i), likely Maven Central 429 - retrying in 30s"
-            sleep 30
-          done
-
-      - name: Install modules to local repo (for OWASP default-cli)
-        run: |
-          for i in 1 2 3; do
-            mvn install -DskipTests -Djacoco.skip=true && break
+            mvn install -DskipTests -DskipITs -Djacoco.skip=true && break
             if [ "$i" -eq 3 ]; then exit 1; fi
             echo "::warning::mvn install failed (attempt $i), likely Maven Central 429 - retrying in 30s"
             sleep 30
           done
 
-      # OWASP scan: blocking on push to master, non-blocking on PRs.
-      # Rationale: NVD keeps publishing new CVEs against the EOL Spring 6.2.x /
-      # Spring Cloud 4.3.x / Spring Security 6.5.x lines (no OSS fixes until a
-      # Boot 4.x migration). New CVEs must not block PR iteration; the policy
-      # stays enforced on master pushes.
-      - name: OWASP Dependency-Check (blocking on push to master)
-        if: github.event_name == 'push'
-        timeout-minutes: 180
+      - name: OWASP Dependency-Check
         env:
           # Optional: set NVD_API_KEY secret in GitHub to speed up NVD download
           # (without a key, full NVD sync can take 2+ hours)
@@ -150,113 +131,42 @@ jobs:
             -DfailOnError=false \
             -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
-      - name: OWASP Dependency-Check (non-blocking on PR)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        timeout-minutes: 180
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        run: |
-          echo "NVD cache hit: ${{ steps.nvd-cache.outputs.cache-hit }}"
-          mvn org.owasp:dependency-check-maven:check \
-            -DdataDirectory=${{ runner.temp }}/odc-nvd \
-            -DfailBuildOnCVSS=7 \
-            -DfailOnError=false \
-            -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
+  # One matrix entry per service: the seven images are built and scanned in parallel instead of
+  # one after another on a single runner. Each Dockerfile is multi-stage and builds its jar from
+  # the sibling modules, so the context stays the repository root.
+  #
+  # Trivy policy is unchanged: blocking on push to master, non-blocking on PRs - the EOL
+  # Spring 6.2.x line keeps collecting CVEs whose only fix is Spring Framework 7 (Boot 4.x).
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - user-service
+          - product-service
+          - inventory-service
+          - order-service
+          - notification-service
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Build Docker Images
+      - name: Build ${{ matrix.service }}
         env:
           # The Dockerfiles use a BuildKit cache mount for ~/.m2 and a `# syntax` directive.
           DOCKER_BUILDKIT: 1
         run: |
-          # The build context is the repository root: each Dockerfile is multi-stage and builds
-          # its jar from the sibling modules (common-security, common-events, outbox-starter),
-          # so no pre-built target/*.jar is required anymore.
-          for service in api-gateway auth-service user-service product-service inventory-service order-service notification-service; do
-            docker build -t order-platform/$service:pr-${{ github.event.number }} -f ./$service/Dockerfile .
-          done
+          docker build -t order-platform/${{ matrix.service }}:pr-${{ github.event.number }} \
+            -f ./${{ matrix.service }}/Dockerfile .
 
-      # Trivy image scan: blocking on push to master, non-blocking on PRs - the same policy
-      # as the OWASP scan above, and for the same reason. The EOL Spring 6.2.x line keeps
-      # collecting CVEs whose only fix is Spring Framework 7 (Boot 4.x). CVE-2026-47884
-      # (CRITICAL, XsltView SSRF/RCE) is the current one: fixed in 7.0.9 only, while this
-      # project uses no XSLT views at all. Findings still show up as warnings on every PR,
-      # and master pushes stay gated.
-      - name: Security Scan (Trivy - api-gateway)
+      - name: Security Scan (Trivy - ${{ matrix.service }})
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
-          image-ref: order-platform/api-gateway:pr-${{ github.event.number }}
+          image-ref: order-platform/${{ matrix.service }}:pr-${{ github.event.number }}
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
-
-      - name: Security Scan (Trivy - auth-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/auth-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Security Scan (Trivy - user-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/user-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Security Scan (Trivy - product-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/product-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Security Scan (Trivy - inventory-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/inventory-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Security Scan (Trivy - order-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/order-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Security Scan (Trivy - notification-service)
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: order-platform/notification-service:pr-${{ github.event.number }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Upload Test Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            **/target/surefire-reports/
-            **/target/jacoco-report/

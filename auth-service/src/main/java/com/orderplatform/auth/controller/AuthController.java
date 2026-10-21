@@ -5,6 +5,7 @@ import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UpdateRolesRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
@@ -48,12 +49,10 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<UserDto> register(@Valid @RequestBody RegisterRequest request) {
-        try {
-            UserDto registeredUser = userService.register(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().build();
-        }
+        // No try/catch: a duplicate email is a UserAlreadyExistsException the advice maps to 400,
+        // while anything else has to surface as a real failure instead of being reported as one.
+        UserDto registeredUser = userService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
     }
 
     @Operation(summary = "Update user roles", description = "Replaces the roles of a user; administrator only")
@@ -78,11 +77,9 @@ public class AuthController {
             return ResponseEntity.badRequest().body(error);
         }
 
-        try {
-            return ResponseEntity.ok(userService.updateRoles(id, roles));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        // A missing user is a UserNotFoundException the advice maps to 404; a broader catch here
+        // used to disguise every other failure as "not found" as well.
+        return ResponseEntity.ok(userService.updateRoles(id, roles));
     }
 
     @PostMapping("/login")
@@ -152,8 +149,11 @@ public class AuthController {
         if (userDetails == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        // The token was valid but the account is gone: a UserNotFoundException the advice maps to
+        // 404, not the 409 a bare RuntimeException used to produce.
         User user = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(
+                        "User not found: " + userDetails.getUsername()));
         return ResponseEntity.ok(userMapper.toDto(user));
     }
 

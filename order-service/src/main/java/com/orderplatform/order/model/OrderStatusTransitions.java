@@ -25,11 +25,11 @@ public final class OrderStatusTransitions {
     }
 
     public static void validateTransition(Order.OrderStatus current, Order.OrderStatus target) {
-        EnumSet<Order.OrderStatus> allowed = validNextStates(current);
+        final EnumSet<Order.OrderStatus> allowed = validNextStates(current);
         if (!allowed.contains(target)) {
             throw new IllegalArgumentException(
-                    "Invalid status transition: " + current + " -> " + target
-                            + ". Allowed: " + allowed);
+                    "Invalid status transition: " + current + " -> " + target +
+                            ". Allowed: " + allowed);
         }
     }
 }

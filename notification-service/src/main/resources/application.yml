@@ -27,6 +27,14 @@ spring:
         # Bounded listener retries: 1s pause, 3 attempts, then the record goes to <topic>.DLT
         retry.backoff-ms: 1000
         retry.max-attempts: 3
+  # Off by default: a local run has no mail server, and every order event would otherwise fail.
+  # Compose turns it on against the bundled MailHog.
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
 
 # Tokens revoked on logout or refresh are rejected here too, so logout is not only cosmetic on the
 # service that issued the token. The lookup fails open: a Redis outage must not stop every
@@ -34,6 +42,11 @@ spring:
 security:
   token-blacklist:
     enabled: true
+
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
+    from: ${NOTIFICATION_EMAIL_FROM:no-reply@order-platform.local}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
@@ -73,3 +86,10 @@ spring:
         specific.avro.reader: true
         retry.backoff-ms: 1000
         retry.max-attempts: 3
+  mail:
+    host: ${SPRING_MAIL_HOST:mailhog}
+    port: ${SPRING_MAIL_PORT:1025}
+
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:true}

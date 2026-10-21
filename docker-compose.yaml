@@ -391,6 +391,10 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+      # Compose ships a mail server, so delivery is on here; the service defaults to off
+      NOTIFICATION_EMAIL_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       mongodb:
@@ -401,6 +405,16 @@ services:
         condition: service_healthy
       schema-registry:
         condition: service_healthy
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  # Catches every message the notification service sends. Its UI lists them at http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - order-network
     restart: unless-stopped

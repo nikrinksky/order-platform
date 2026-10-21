@@ -3,9 +3,12 @@ package com.orderplatform.notification.service;
 import com.orderplatform.events.order.OrderCreatedEvent;
 import com.orderplatform.events.order.OrderStatusChangedEvent;
 import com.orderplatform.notification.model.Notification;
+import com.orderplatform.notification.model.UserContact;
 import com.orderplatform.notification.repository.NotificationRepository;
+import com.orderplatform.notification.repository.UserContactRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +28,12 @@ class NotificationServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private UserContactRepository userContactRepository;
+
+    @Mock
+    private EmailSender emailSender;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -166,5 +175,98 @@ class NotificationServiceTest {
 
         assertEquals(1, result.size());
         assertFalse(result.get(0).isSent());
+    }
+
+    /**
+     * The whole point of the flow: a notification the user is supposed to receive has to reach the
+     * mail server, and only then may it be recorded as sent.
+     */
+    @Test
+    void onOrderCreated_shouldSendEmailAndMarkNotificationAsSent() {
+        when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.empty());
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+
+        notificationService.onOrderCreated(orderCreated(), "event-1");
+
+        // Saved once on creation and once more when the delivery was recorded
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(saved.capture());
+        Notification delivered = saved.getValue();
+        assertTrue(delivered.isSent(), "marked sent after delivery");
+        assertNotNull(delivered.getSentAt());
+
+        verify(emailSender).send(eq("buyer@example.com"), anyString(), anyString());
+    }
+
+    /**
+     * The contact projection may lag behind, so an unknown address must leave the notification
+     * unsent and readable instead of failing the whole event or pretending it was delivered.
+     */
+    @Test
+    void onOrderCreated_shouldLeaveNotificationUnsentWhenNoAddressIsKnown() {
+        when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.empty());
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userContactRepository.findById("user-1")).thenReturn(Optional.empty());
+
+        notificationService.onOrderCreated(orderCreated(), "event-1");
+
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(saved.capture());
+        assertFalse(saved.getValue().isSent());
+        verify(emailSender, never()).send(anyString(), anyString(), anyString());
+    }
+
+    /**
+     * A refused message has to surface as a failure. Reporting it as sent would lose the
+     * notification: the offset would be acknowledged and nothing would ever retry it.
+     */
+    @Test
+    void onOrderCreated_shouldPropagateSendFailureSoTheEventIsRetried() {
+        when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.empty());
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+        doThrow(new RuntimeException("mail server refused the message"))
+                .when(emailSender).send(anyString(), anyString(), anyString());
+
+        assertThrows(RuntimeException.class,
+                () -> notificationService.onOrderCreated(orderCreated(), "event-1"));
+    }
+
+    @Test
+    void onOrderStatusChanged_shouldSendEmailAndMarkNotificationAsSent() {
+        OrderStatusChangedEvent event = OrderStatusChangedEvent.newBuilder()
+                .setOrderId("order-1")
+                .setUserId("user-1")
+                .setOrderNumber("ORD-ABC12345")
+                .setStatus("PAID")
+                .build();
+
+        when(notificationRepository.findByEventId("event-2")).thenReturn(Optional.empty());
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+
+        notificationService.onOrderStatusChanged(event, "event-2");
+
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(saved.capture());
+        assertTrue(saved.getValue().isSent());
+        verify(emailSender).send(eq("buyer@example.com"), anyString(), anyString());
     }
 }

@@ -14,7 +14,7 @@ public class FallbackController {
 
     @GetMapping("/auth")
     public Mono<Map<String, String>> authFallback() {
-        Map<String, String> response = new HashMap<>();
+        final Map<String, String> response = new HashMap<>();
         response.put("error", "Auth service is unavailable. Please try again later.");
         response.put("status", "503");
         return Mono.just(response);
@@ -22,7 +22,7 @@ public class FallbackController {
 
     @GetMapping("/user")
     public Mono<Map<String, String>> userFallback() {
-        Map<String, String> response = new HashMap<>();
+        final Map<String, String> response = new HashMap<>();
         response.put("error", "User service is unavailable. Please try again later.");
         response.put("status", "503");
         return Mono.just(response);
@@ -30,7 +30,7 @@ public class FallbackController {
 
     @GetMapping("/product")
     public Mono<Map<String, String>> productFallback() {
-        Map<String, String> response = new HashMap<>();
+        final Map<String, String> response = new HashMap<>();
         response.put("error", "Product service is unavailable. Please try again later.");
         response.put("status", "503");
         return Mono.just(response);

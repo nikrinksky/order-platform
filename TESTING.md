@@ -11,10 +11,15 @@
 
 ### Integration-тесты (Testcontainers)
 - **Паттерн именования:** `*IT.java` или `*IntegrationTest.java`
-- **Расположение:** `src/test/java/.../integration/`
-- **База данных:** Реальные контейнеры PostgreSQL/MongoDB
-- **Запуск:** `mvn verify` (Failsafe plugin)
+- **Расположение:** `src/it/java/.../integration/` (подключается через `build-helper-maven-plugin`)
+- **База данных:** настоящие контейнеры PostgreSQL 15 / MongoDB 7 (Testcontainers), H2 больше не используется
+- **Запуск:** `mvn verify -Pintegration-tests` (Failsafe plugin)
 - **Пример:** `AuthControllerIntegrationTest.java`
+
+Один контейнер на JVM, поднимается в `static`-блоке базового класса до создания Spring-контекста:
+контексты кешируются и переиспользуются между классами, поэтому контейнер на класс перезапускал бы
+базу под живым контекстом. Параметры подключения передаются через `@DynamicPropertySource` — они
+перекрывают переменные окружения, так что CI не может случайно направить тесты в другую базу.
 
 ## 🚀 Запуск тестов
 
@@ -30,8 +35,10 @@ mvn test
 
 ### Только Integration-тесты
 ```bash
-mvn verify -DskipUnitTests=true
+mvn verify -Pintegration-tests -DskipUnitTests=true
 ```
+Профиль обязателен: без него `skipITs=true` (значение по умолчанию в корневом `pom.xml`) и
+failsafe-тесты просто не запускаются.
 
 ### С отчетом о покрытии
 ```bash
@@ -67,20 +74,33 @@ start target\site\jacoco\index.html
 ## 🔄 CI/CD Pipeline
 
 ### Этапы:
-1. **Checkstyle** - проверка стиля кода
-2. **Unit Tests** - быстрый тест с H2
-3. **JaCoCo Report** - отчет о покрытии
-4. **Build JAR** - сборка артефактов
-5. **Build Docker** - сборка образов
-6. **Integration Tests** - тест с Testcontainers
-7. **OWASP Check** - проверка зависимостей
-8. **Trivy Scan** - сканирование образов
-9. **Upload Reports** - загрузка отчетов
+1. **Checkstyle** - проверка стиля кода (падает на нарушении, см. `config/checkstyle/sun_checks.xml`)
+2. **Tests (unit + integration)** - один вызов `mvn verify -Pintegration-tests`: сначала surefire
+   на H2, затем failsafe на Testcontainers
+3. **Upload Reports** - surefire/failsafe/jacoco отчёты как артефакт
+4. **Build + Trivy** - отдельный job с матрицей по 7 сервисам: образы собираются и сканируются
+   параллельно
+5. **OWASP Dependency-Check** - отдельный job, только на push в `master` и по расписанию
+   (еженедельно). На PR не запускается: полная синхронизация NVD занимает часы и всё равно не
+   блокировала PR
+
+### Почему job'ы разделены
+Раньше всё шло одной цепочкой на одном runner'е: checkstyle, `mvn test`, `mvn verify`, `mvn install`,
+OWASP на PR и push, затем семь сборок образов и семь сканирований подряд. Проект компилировался
+трижды, unit-тесты прогонялись дважды, а OWASP добавлял к каждому PR те же часы, что и к push в
+`master`, оставаясь при этом `continue-on-error`. Теперь тесты идут одним вызовом, образы — матрицей,
+а тяжёлое сканирование вынесено в job, который на PR не стартует вовсе.
 
 ### Запуск локально как в CI:
 ```bash
-mvn clean verify
+mvn checkstyle:check -Dcheckstyle.config.location=./config/checkstyle/sun_checks.xml
+mvn verify -Pintegration-tests -T 1 -Djacoco.skip=true
 ```
+
+`-T 1` обязателен для integration-тестов: `.mvn/maven.config` задаёт `-T 1C`, а каждый модуль
+поднимает свои контейнеры PostgreSQL/MongoDB. При параллельной сборке нескольких модулей
+Testcontainers не успевает подключиться к Docker и падает с
+`Could not find a valid Docker environment`.
 
 ## 📁 Структура тестов по сервисам
 

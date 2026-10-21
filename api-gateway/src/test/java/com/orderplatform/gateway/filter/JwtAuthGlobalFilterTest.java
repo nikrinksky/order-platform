@@ -270,5 +270,57 @@ class JwtAuthGlobalFilterTest {
         assertEquals(HttpStatus.OK,
                 runFilter(HttpMethod.GET, "/api/orders", "Bearer " + token));
     }
+
+    /**
+     * A public route carries no validated token, so identity headers arriving with the request are
+     * unauthenticated claims. Forwarding them would let a client pick any user id - and with it
+     * that user's rate limit bucket - without proving anything.
+     */
+    @Test
+    void shouldStripClientSuppliedIdentityHeadersOnPublicPath() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/products/1")
+                        .header("X-User-Id", "somebody-else")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .build());
+
+        Map<String, String> forwarded = new HashMap<>();
+        GatewayFilterChain chain = e -> {
+            forwarded.put("userId", e.getRequest().getHeaders().getFirst("X-User-Id"));
+            forwarded.put("roles", e.getRequest().getHeaders().getFirst("X-User-Roles"));
+            return Mono.empty();
+        };
+        filter.filter(exchange, chain).block();
+
+        assertEquals(null, forwarded.get("userId"));
+        assertEquals(null, forwarded.get("roles"));
+    }
+
+    /**
+     * The validated token is what vouches for the identity, so on a protected route the headers
+     * have to be replaced even when the client sent its own values.
+     */
+    @Test
+    void shouldOverwriteClientSuppliedIdentityHeadersOnProtectedPath() {
+        String token = token("access", new Date(System.currentTimeMillis() + 3_600_000),
+                List.of("USER"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-User-Id", "somebody-else")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .build());
+
+        Map<String, String> forwarded = new HashMap<>();
+        GatewayFilterChain chain = e -> {
+            forwarded.put("userId", e.getRequest().getHeaders().getFirst("X-User-Id"));
+            forwarded.put("roles", e.getRequest().getHeaders().getFirst("X-User-Roles"));
+            return Mono.empty();
+        };
+        filter.filter(exchange, chain).block();
+
+        assertEquals("user-42", forwarded.get("userId"));
+        assertEquals("USER", forwarded.get("roles"));
+    }
 }
 

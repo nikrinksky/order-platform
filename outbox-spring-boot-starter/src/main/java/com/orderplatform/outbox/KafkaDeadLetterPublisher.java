@@ -44,10 +44,10 @@ public class KafkaDeadLetterPublisher implements DeadLetterPublisher {
 
     @Override
     public void send(OutboxMessage message, String reason) {
-        String destination = message.getTopic() + deadLetterSuffix;
-        SpecificRecordBase payload = codec.fromJson(message.getEventType(), message.getPayload());
+        final String destination = message.getTopic() + deadLetterSuffix;
+        final SpecificRecordBase payload = codec.fromJson(message.getEventType(), message.getPayload());
 
-        ProducerRecord<String, Object> record = new ProducerRecord<>(destination, null,
+        final ProducerRecord<String, Object> record = new ProducerRecord<>(destination, null,
                 message.getEventKey(), payload);
         record.headers().add(new RecordHeader(OutboxHeaders.EVENT_ID,
                 message.getEventId().getBytes(StandardCharsets.UTF_8)));
@@ -63,8 +63,8 @@ public class KafkaDeadLetterPublisher implements DeadLetterPublisher {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while parking event " + message.getEventId(), e);
         } catch (Exception e) {
-            throw new IllegalStateException("Cannot park event " + message.getEventId()
-                    + " on " + destination, e);
+            throw new IllegalStateException("Cannot park event " + message.getEventId() +
+                    " on " + destination, e);
         }
     }
 

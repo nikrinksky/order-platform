@@ -27,9 +27,9 @@ public class CatalogAccess {
      * @return true for an authenticated administrator or manager, false otherwise
      */
     public boolean canViewHiddenProducts() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-                || authentication instanceof AnonymousAuthenticationToken) {
+        final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() ||
+                authentication instanceof AnonymousAuthenticationToken) {
             return false;
         }
         return authentication.getAuthorities().stream()

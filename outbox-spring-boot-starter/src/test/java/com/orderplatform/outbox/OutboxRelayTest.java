@@ -2,6 +2,7 @@ package com.orderplatform.outbox;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -78,6 +79,23 @@ class OutboxRelayTest {
         assertThat(record.getStatus()).isEqualTo(OutboxRecordStatus.PUBLISHED);
         // The claim burned one attempt before the publish succeeded
         assertThat(record.getAttempts()).isEqualTo(1);
+    }
+
+    /**
+     * The message handed to the publisher carries the business key, not the row id: consumers see
+     * only the header, and "42" would tell them nothing about which order it belongs to.
+     */
+    @Test
+    void publishPending_shouldHandTheBusinessEventIdToThePublisher() {
+        OutboxRecord record = record(0);
+        dueRecords(record);
+        when(repository.findById(42L)).thenReturn(Optional.of(record));
+
+        relay().publishPending();
+
+        ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
+        verify(publisher).publish(captor.capture());
+        assertThat(captor.getValue().getEventId()).isEqualTo("order-1:CREATED");
     }
 
     @Test
