@@ -4,6 +4,7 @@ import com.orderplatform.inventory.AbstractInventoryDatabaseTest;
 import com.orderplatform.inventory.InventoryServiceApplication;
 import com.orderplatform.inventory.model.InventoryItem;
 import com.orderplatform.inventory.repository.InventoryItemRepository;
+import com.orderplatform.inventory.repository.ReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +51,12 @@ class InventoryReservationSecurityIntegrationTest extends AbstractInventoryDatab
     @Autowired
     private InventoryItemRepository inventoryItemRepository;
 
+    @Autowired
+    private ReservationRepository reservationRepository;
+
     @BeforeEach
     void setUp() {
+        reservationRepository.deleteAll();
         inventoryItemRepository.deleteAll();
         inventoryItemRepository.save(InventoryItem.builder()
                 .id("inv-1")
