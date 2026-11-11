@@ -1,6 +1,7 @@
 package com.orderplatform.inventory.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.orderplatform.inventory.dto.CommitResponse;
 import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
@@ -9,8 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Optional;
@@ -40,7 +41,7 @@ class InventoryControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private InventoryService inventoryService;
 
     @Test
@@ -151,6 +152,22 @@ class InventoryControllerTest {
                         .param("quantity", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reserved").value(true));
+    }
+
+    @Test
+    void shouldCommitStock() throws Exception {
+        when(inventoryService.commit("order-1")).thenReturn(CommitResponse.builder()
+                .orderId("order-1")
+                .committed(true)
+                .itemsCommitted(1)
+                .message("Committed successfully")
+                .build());
+
+        mockMvc.perform(post("/api/inventory/commit")
+                        .param("orderId", "order-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.committed").value(true))
+                .andExpect(jsonPath("$.itemsCommitted").value(1));
     }
 
     @Test

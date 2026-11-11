@@ -458,17 +458,72 @@ class OrderServiceTest {
         verify(inventoryClient).release("product-1", 2, "order-1");
     }
 
+    /**
+     * A shipped order can no longer be cancelled: the goods left the warehouse, so there is no
+     * reservation to give back - the stock would be both shipped and free.
+     */
     @Test
-    void updateStatus_shouldReleaseReservationsWhenShippedOrderCancelled() {
+    void updateStatus_shouldRejectCancellationOfShippedOrder() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.SHIPPED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED));
+        assertEquals(Order.OrderStatus.SHIPPED, order.getStatus());
+        verify(inventoryClient, never()).release(anyString(), anyInt(), anyString());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    /**
+     * The defect this guards: completing an order left the reservation in place, so the stock
+     * stayed out of circulation although the goods had shipped.
+     */
+    @Test
+    void updateStatus_shouldCommitStockWhenCompleted() {
         Order order = sampleOrder();
         order.setStatus(Order.OrderStatus.SHIPPED);
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryClient.commit("order-1")).thenReturn(true);
 
-        OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.CANCELLED);
+        OrderResponse response = orderService.updateStatus("order-1", Order.OrderStatus.COMPLETED);
 
-        assertEquals("CANCELLED", response.getStatus());
-        verify(inventoryClient).release("product-1", 2, "order-1");
+        assertEquals("COMPLETED", response.getStatus());
+        verify(inventoryClient).commit("order-1");
+        // A completed order gives nothing back: the goods are gone, not returned to the pool.
+        verify(inventoryClient, never()).release(anyString(), anyInt(), anyString());
+    }
+
+    /**
+     * A write-off that inventory did not confirm must abort the transition: an order marked
+     * COMPLETED while its reservation stays behind keeps the goods reserved for good.
+     */
+    @Test
+    void updateStatus_shouldNotCompleteWhenCommitFails() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.SHIPPED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(inventoryClient.commit("order-1")).thenReturn(false);
+
+        assertThrows(IllegalStateException.class,
+                () -> orderService.updateStatus("order-1", Order.OrderStatus.COMPLETED));
+        assertEquals(Order.OrderStatus.SHIPPED, order.getStatus());
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
+    }
+
+    /** Only the write-off path calls commit; the other transitions must not. */
+    @Test
+    void updateStatus_shouldNotCommitStockOnOtherTransitions() {
+        Order order = sampleOrder();
+        order.setStatus(Order.OrderStatus.PAID);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderService.updateStatus("order-1", Order.OrderStatus.SHIPPED);
+
+        verify(inventoryClient, never()).commit(anyString());
     }
 
     @Test

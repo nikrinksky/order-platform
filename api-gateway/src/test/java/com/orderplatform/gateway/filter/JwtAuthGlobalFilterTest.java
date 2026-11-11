@@ -98,6 +98,13 @@ class JwtAuthGlobalFilterTest {
     }
 
     @Test
+    void shouldBlockInternalCommitEndpoint() {
+        assertEquals(HttpStatus.FORBIDDEN,
+                runFilter(HttpMethod.GET,
+                        "/api/inventory/commit", "Bearer whatever"));
+    }
+
+    @Test
     void shouldAllowFallbackWithoutToken() {
         assertEquals(HttpStatus.OK,
                 runFilter(HttpMethod.GET, "/fallback/auth"));

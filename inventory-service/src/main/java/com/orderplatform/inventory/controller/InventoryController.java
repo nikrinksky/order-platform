@@ -1,5 +1,6 @@
 package com.orderplatform.inventory.controller;
 
+import com.orderplatform.inventory.dto.CommitResponse;
 import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
@@ -64,6 +65,16 @@ public class InventoryController {
             @RequestParam String productId,
             @RequestParam @Positive(message = "quantity must be greater than zero") Integer quantity) {
         return ResponseEntity.ok(inventoryService.release(orderId, productId, quantity));
+    }
+
+    /**
+     * Writes off the stock an order held. Called by order-service when an order reaches
+     * {@code COMPLETED}: the goods have left the warehouse, so the units leave both the free pool
+     * and the total. Idempotent, so a retry after a timeout is safe.
+     */
+    @PostMapping("/commit")
+    public ResponseEntity<CommitResponse> commit(@RequestParam String orderId) {
+        return ResponseEntity.ok(inventoryService.commit(orderId));
     }
 
     @PatchMapping("/product/{productId}/quantity")

@@ -180,6 +180,14 @@ public class OrderService {
         // Validate state transition
         OrderStatusTransitions.validateTransition(order.getStatus(), status);
 
+        // The goods left the warehouse, so the stock has to be written off before the order is
+        // declared complete. A failure aborts the transition: marking an order COMPLETED while the
+        // reservation stays behind would keep the goods out of circulation for good.
+        if (status == OrderStatus.COMPLETED && !inventoryClient.commit(orderId)) {
+            throw new IllegalStateException(
+                    "Cannot complete order " + orderId + ": inventory-service did not confirm the stock write-off");
+        }
+
         OrderStatus previousStatus = order.getStatus();
         order.setStatus(status);
         order.setUpdatedAt(LocalDateTime.now());
@@ -195,7 +203,9 @@ public class OrderService {
 
         // Compensation: cancelling an order that still holds a reservation must release the stock.
         // The reservation is held from RESERVED until the goods leave the warehouse (SHIPPED), so
-        // a cancellation from PAID or SHIPPED leaks stock unless it is released here too.
+        // a cancellation from PAID leaks stock unless it is released here too. SHIPPED is not in
+        // this list: such an order can no longer be cancelled, and its stock is written off on
+        // COMPLETED instead.
         if (status == OrderStatus.CANCELLED && holdsReservation(previousStatus)) {
             releaseReservations(orderId, order.getItems());
         }
@@ -208,8 +218,7 @@ public class OrderService {
     /** Whether an order in this status still holds stock reserved in inventory. */
     private static boolean holdsReservation(OrderStatus status) {
         return status == OrderStatus.RESERVED ||
-                status == OrderStatus.PAID ||
-                status == OrderStatus.SHIPPED;
+                status == OrderStatus.PAID;
     }
 
     public OrderResponse findById(String orderId) {

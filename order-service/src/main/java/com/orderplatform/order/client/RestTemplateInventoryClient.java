@@ -100,4 +100,23 @@ public class RestTemplateInventoryClient implements InventoryClient {
             // синхронизируется повторной операцией или компенсацией.
         }
     }
+
+    @Override
+    public boolean commit(String orderId) {
+        try {
+            String url = UriComponentsBuilder.fromUriString(inventoryBaseUrl)
+                    .path("/api/inventory/commit")
+                    .queryParam("orderId", orderId)
+                    .toUriString();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.postForObject(url, HttpEntity.EMPTY, Map.class);
+
+            // Only an explicit confirmation counts: an empty body means the write-off was not
+            // confirmed, and the order must not be completed on a guess.
+            return response != null && Boolean.TRUE.equals(response.get("committed"));
+        } catch (ResourceAccessException | HttpStatusCodeException e) {
+            return false;
+        }
+    }
 }

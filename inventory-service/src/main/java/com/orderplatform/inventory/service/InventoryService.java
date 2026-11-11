@@ -2,6 +2,7 @@ package com.orderplatform.inventory.service;
 
 import com.orderplatform.events.inventory.InventoryReleasedEvent;
 import com.orderplatform.events.inventory.InventoryReservedEvent;
+import com.orderplatform.inventory.dto.CommitResponse;
 import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
@@ -16,6 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -221,6 +225,82 @@ public class InventoryService {
                 .build();
     }
 
+    /**
+     * Writes off the stock an order held, because the goods left the warehouse.
+     *
+     * <p>This is the operation that was missing: an order that reached {@code COMPLETED} used to
+     * leave its reservation in place for good, so {@code reserved} never went back down and the
+     * stock stayed out of circulation although the goods had shipped.
+     *
+     * <p>Committing is not releasing: the units leave {@code quantity} as well, because they are
+     * gone, whereas a release only gives them back to the free pool.
+     *
+     * <p>Idempotent per order: every {@code ACTIVE} reservation is written off in one transaction,
+     * so a repeated call - or a retry after a timeout - finds nothing active and reports success.
+     * Committing an order that was already cancelled is a no-op for the same reason.
+     *
+     * @param orderId the order whose goods shipped
+     * @return the outcome; {@code itemsCommitted} is zero when there was nothing left to commit
+     */
+    @Transactional
+    public CommitResponse commit(String orderId) {
+        requireText(orderId, "Order id");
+
+        List<Reservation> active = new ArrayList<>(
+                reservationRepository.findByOrderIdAndStatus(orderId, ReservationStatus.ACTIVE));
+        if (active.isEmpty()) {
+            log.info("No active reservation for order {}, nothing to commit", orderId);
+            return CommitResponse.builder()
+                    .orderId(orderId)
+                    .committed(true)
+                    .itemsCommitted(0)
+                    .message("No active reservation to commit")
+                    .build();
+        }
+
+        // A single order may hold several products. Locking them in a stable order keeps two
+        // concurrent commits of overlapping orders from taking the same two rows in opposite
+        // order, which is a deadlock.
+        active.sort(Comparator.comparing(Reservation::getProductId));
+
+        for (Reservation reservation : active) {
+            writeOff(reservation);
+        }
+
+        log.info("Committed {} reservation(s) of order {}", active.size(), orderId);
+        return CommitResponse.builder()
+                .orderId(orderId)
+                .committed(true)
+                .itemsCommitted(active.size())
+                .message("Committed successfully")
+                .build();
+    }
+
+    /** Takes one reservation out of the free stock and out of the aggregate for good. */
+    private void writeOff(Reservation reservation) {
+        String productId = reservation.getProductId();
+        int quantity = reservation.getQuantity();
+
+        InventoryItem item = inventoryItemRepository.findByProductIdForUpdate(productId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Reservation exists for product " + productId + " but its inventory row is missing"));
+
+        if (item.getQuantity() < quantity) {
+            // Stock was reduced below what the order holds. Writing the full amount off would
+            // drive the counter negative, so the remainder is clamped and flagged for review.
+            log.warn("Committed quantity of product {} exceeds the stock on hand ({} < {}), " +
+                    "clamping to zero", productId, item.getQuantity(), quantity);
+        }
+        item.setQuantity(Math.max(0, item.getQuantity() - quantity));
+        item.setReserved(Math.max(0, item.getReserved() - quantity));
+        item.setUpdatedAt(LocalDateTime.now());
+        inventoryItemRepository.save(item);
+
+        reservation.setStatus(ReservationStatus.COMMITTED);
+        reservation.setUpdatedAt(LocalDateTime.now());
+        reservationRepository.save(reservation);
+    }
+
     @Transactional
     public InventoryItem createOrUpdate(String productId, Integer quantity) {
         requireNotNegative(quantity, "Stock quantity");
@@ -283,6 +363,13 @@ public class InventoryService {
     private static void requireNotNegative(Integer quantity, String what) {
         if (quantity == null || quantity < 0) {
             throw new IllegalArgumentException(what + " must not be negative");
+        }
+    }
+
+    /** Rejects a blank identifier, so a missing parameter cannot be mistaken for a real one. */
+    private static void requireText(String value, String what) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(what + " must not be blank");
         }
     }
 }
