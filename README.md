@@ -302,9 +302,9 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 компенсирующих действиях при сбоях:
 
 ```
-NEW ──reserve──> RESERVED ──pay──> PAID ──ship──> SHIPPED ──complete──> COMPLETED
- │                    │
- └──────cancel──────> CANCELLED <──cancel────── PAID / SHIPPED
+создание ──reserve──> RESERVED ──pay──> PAID ──ship──> SHIPPED ──complete──> COMPLETED
+                          │                │
+                          └────cancel──────┴──> CANCELLED
 ```
 
 Ключевые гарантии:
@@ -313,12 +313,13 @@ NEW ──reserve──> RESERVED ──pay──> PAID ──ship──> SHIPPE
 |----------|----------|
 | Идемпотентность создания | Заголовок `Idempotency-Key`: повторный запрос с тем же ключом → `409 Conflict` |
 | Валидация переходов статусов | `OrderStatusTransitions`: недопустимый переход → `400 Bad Request`, терминальные статусы (`COMPLETED`/`CANCELLED`) не меняются |
-| Атомарное резервирование | `reserveOrder` резервирует позиции по одной; при отказе/сбое inventory-service все уже зарезервированные позиции освобождаются (`release`), заказ → `CANCELLED` |
-| Компенсация при отмене | Отмена заказа в статусе `RESERVED` освобождает зарезервированный товар (best-effort, ошибки логируются) |
-| Устойчивость к сбоям inventory | `hasStock` — fail-open (резерв остаётся единственной гарантией), `reserve` — fail-closed, `release` — best-effort |
+| Атомарное резервирование | `createOrder` сразу резервирует все позиции; при отказе или сбое inventory-service уже зарезервированные позиции освобождаются (`release`), транзакция откатывается и заказ не создаётся |
+| Компенсация при отмене | Отмена заказа в статусе `RESERVED` или `PAID` освобождает зарезервированный товар (best-effort, ошибки логируются); `SHIPPED` отменить нельзя — товар уже ушёл со склада |
+| Списание при завершении | Переход `SHIPPED → COMPLETED` списывает резерв (`commit`: единицы уходят и из `quantity`, и из `reserved`); если inventory-service не подтвердил списание, переход отклоняется с `409 Conflict` |
+| Устойчивость к сбоям inventory | `reserve` — fail-closed, `release` — best-effort, `commit` — fail-closed |
 
 HTTP-контракт ошибок: `400` — невалидные данные/переход, `404` — заказ не найден,
-`409` — дубликат идемпотентного ключа.
+`409` — дубликат идемпотентного ключа или неподтверждённое списание остатка.
 
 ## Статус сервисов
 
