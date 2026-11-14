@@ -61,16 +61,7 @@ public class OrderService {
             throw new IllegalArgumentException("Order must contain at least one item");
         }
 
-        // 3. Pre-check inventory availability for ALL items (fail-fast)
-        for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
-            if (!inventoryClient.hasStock(itemReq.getProductId(), itemReq.getQuantity())) {
-                throw new IllegalArgumentException(
-                        "Insufficient inventory for product " + itemReq.getProductId() +
-                                " (requested: " + itemReq.getQuantity() + ")");
-            }
-        }
-
-        // 4. Build order
+        // 3. Build order
         Order order = Order.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(request.getUserId())
@@ -99,6 +90,15 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
         order = orderRepository.save(order);
 
+        // 4. Hold the stock right away. Ordering used to need a second, administrator-only call
+        //    before the order could leave NEW, so a normal customer order never reached RESERVED
+        //    on its own. The hold is compensated if any item is rejected, and the exception rolls
+        //    the transaction back, so a failed reservation leaves no half-created order behind.
+        reserveItems(order);
+        order.setStatus(OrderStatus.RESERVED);
+        order.setUpdatedAt(LocalDateTime.now());
+        order = orderRepository.save(order);
+
         // 5. Save idempotency key
         if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
             idempotencyKeyRepository.save(new IdempotencyKey(
@@ -107,7 +107,7 @@ public class OrderService {
             ));
         }
 
-        log.info("Order {} created for user {} with total {}",
+        log.info("Order {} created for user {} with total {}, stock reserved",
                 order.getOrderNumber(), order.getUserId(), order.getTotalAmount());
 
         outboxService.append(Topics.ORDER_CREATED, order.getId(),
@@ -122,6 +122,45 @@ public class OrderService {
         return OrderResponse.from(order);
     }
 
+    /**
+     * Reserves every item of a newly created order.
+     *
+     * <p>All or nothing: if an item is rejected, the ones already reserved are given back before
+     * the exception propagates. Without that compensation the earlier items would stay held for
+     * an order that is about to be rolled back.
+     *
+     * @param order the order whose items are reserved
+     * @throws IllegalArgumentException when an item cannot be reserved
+     */
+    private void reserveItems(Order order) {
+        List<OrderItem> reserved = new ArrayList<>();
+        try {
+            for (OrderItem item : order.getItems()) {
+                if (!inventoryClient.reserve(item.getProductId(), item.getQuantity(), order.getId())) {
+                    releaseReservations(order.getId(), reserved);
+                    throw new IllegalArgumentException(
+                            "Insufficient inventory for product " + item.getProductId() +
+                                    " (requested: " + item.getQuantity() + ")");
+                }
+                reserved.add(item);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Order {} - inventory call failed while reserving: {}", order.getId(), e.toString());
+            releaseReservations(order.getId(), reserved);
+            throw new IllegalStateException(
+                    "Could not reserve stock for order " + order.getId(), e);
+        }
+    }
+
+    /**
+     * Holds the stock of an existing {@code NEW} order.
+     *
+     * <p>New orders are reserved on creation, so this is no longer part of the normal flow. It
+     * stays as the manual path for orders created before that change, and for a retry by an
+     * administrator after the stock was restocked.</p>
+     */
     @Transactional
     public OrderResponse reserveOrder(String orderId) {
         // Locked read: a concurrent or repeated reserve must not reserve the same stock twice

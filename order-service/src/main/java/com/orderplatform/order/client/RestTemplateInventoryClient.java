@@ -35,31 +35,6 @@ public class RestTemplateInventoryClient implements InventoryClient {
     }
 
     @Override
-    public boolean hasStock(String productId, int quantity) {
-        try {
-            String url = UriComponentsBuilder.fromUriString(inventoryBaseUrl)
-                    .path("/api/inventory/product/{productId}")
-                    .buildAndExpand(productId)
-                    .toUriString();
-
-            Map<?, ?> item = restTemplate.getForObject(url, Map.class);
-            if (item == null) {
-                // No stock record at all: the product is not in the warehouse, so there is
-                // nothing to reserve. It used to be reported as "stock available", which let an
-                // order for an unknown product through the pre-check.
-                return false;
-            }
-            if (!(item.get("availableQuantity") instanceof Number available)) {
-                // The field is missing: fail open, a contract mismatch must not block ordering.
-                return true;
-            }
-            return available.intValue() >= quantity;
-        } catch (ResourceAccessException | HttpStatusCodeException e) {
-            return true;
-        }
-    }
-
-    @Override
     public boolean reserve(String productId, int quantity, String orderId) {
         try {
             String url = inventoryBaseUrl + "/api/inventory/reserve";

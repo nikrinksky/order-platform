@@ -31,45 +31,6 @@ class RestTemplateInventoryClientTest {
     }
 
     @Test
-    void hasStockReturnsTrueWhenAvailableQuantityIsEnough() {
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenReturn(Map.of("productId", "p1", "availableQuantity", 10));
-
-        assertThat(client().hasStock("p1", 5)).isTrue();
-    }
-
-    @Test
-    void hasStockReturnsFalseWhenAvailableQuantityIsInsufficient() {
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenReturn(Map.of("productId", "p1", "availableQuantity", 2));
-
-        assertThat(client().hasStock("p1", 5)).isFalse();
-    }
-
-    @Test
-    void hasStockReturnsFalseWhenItemIsUnknown() {
-        when(restTemplate.getForObject(anyString(), eq(Map.class))).thenReturn(null);
-
-        assertThat(client().hasStock("unknown", 5)).isFalse();
-    }
-
-    @Test
-    void hasStockFailsOpenWhenQuantityFieldIsMissing() {
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenReturn(Map.of("productId", "p1"));
-
-        assertThat(client().hasStock("p1", 5)).isTrue();
-    }
-
-    @Test
-    void hasStockFailsOpenWhenInventoryIsUnreachable() {
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenThrow(new ResourceAccessException("connection refused"));
-
-        assertThat(client().hasStock("p1", 5)).isTrue();
-    }
-
-    @Test
     void reserveReturnsTrueWhenInventoryConfirmsReservation() {
         when(restTemplate.postForObject(anyString(), any(), eq(Map.class)))
                 .thenReturn(Map.of("reserved", true));
