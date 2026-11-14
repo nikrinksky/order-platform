@@ -42,7 +42,8 @@ class OrderControllerIntegrationTest extends AbstractOrderIntegrationTest {
 
     @BeforeEach
     void stubExternalServices() {
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
+        // The order holds its stock on creation, so the reservation is what has to be confirmed.
+        when(inventoryClient.reserve(anyString(), anyInt(), anyString())).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenReturn(Map.of("price", "10.00"));
     }
@@ -66,7 +67,31 @@ class OrderControllerIntegrationTest extends AbstractOrderIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userId").value("test-user-123"))
                 .andExpect(jsonPath("$.orderNumber").exists())
-                .andExpect(jsonPath("$.status").value("NEW"));
+                // The stock is held by the time the caller gets the order back
+                .andExpect(jsonPath("$.status").value("RESERVED"));
+    }
+
+    /**
+     * The order is rolled back when the stock cannot be held, so the caller is not left with a
+     * half-created order that will never ship.
+     */
+    @Test
+    void shouldRejectOrderWhenStockCannotBeReserved() throws Exception {
+        when(inventoryClient.reserve(anyString(), anyInt(), anyString())).thenReturn(false);
+
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .userId("test-user-123")
+                .items(List.of(CreateOrderRequest.OrderItemRequest.builder()
+                        .productId("product-1")
+                        .productName("Test Product")
+                        .quantity(2)
+                        .build()))
+                .build();
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

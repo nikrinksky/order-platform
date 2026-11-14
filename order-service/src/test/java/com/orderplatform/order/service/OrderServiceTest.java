@@ -113,25 +113,45 @@ class OrderServiceTest {
                 .build();
     }
 
+    private CreateOrderRequest twoItemRequest() {
+        return CreateOrderRequest.builder()
+                .userId("user-1")
+                .items(List.of(
+                        CreateOrderRequest.OrderItemRequest.builder()
+                                .productId("product-1")
+                                .productName("Item1")
+                                .quantity(2)
+                                .build(),
+                        CreateOrderRequest.OrderItemRequest.builder()
+                                .productId("product-2")
+                                .productName("Item2")
+                                .quantity(3)
+                                .build()
+                ))
+                .build();
+    }
+
     @Test
     void createOrder_shouldReturnCreatedOrder() {
-        when(inventoryClient.hasStock(eq("product-1"), eq(2))).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(eq("product-1"), eq(2), anyString())).thenReturn(true);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.createOrder(sampleRequest());
 
         assertNotNull(response);
         assertEquals("user-1", response.getUserId());
-        assertEquals("NEW", response.getStatus());
+        // A customer order now holds its stock on creation instead of waiting for an admin
+        assertEquals("RESERVED", response.getStatus());
         assertEquals(new BigDecimal("20.00"), response.getTotalAmount());
 
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
-        verify(orderRepository).save(captor.capture());
+        verify(orderRepository, times(2)).save(captor.capture());
         Order saved = captor.getValue();
         assertEquals(new BigDecimal("20.00"), saved.getTotalAmount());
         assertEquals(new BigDecimal("10.00"), saved.getItems().get(0).getPrice());
+        assertEquals(Order.OrderStatus.RESERVED, saved.getStatus());
 
         // The event goes to the outbox, not straight to Kafka: it must live in the same
         // transaction as the order, otherwise a broker outage loses it
@@ -139,15 +159,77 @@ class OrderServiceTest {
                 any(com.orderplatform.events.order.OrderCreatedEvent.class));
     }
 
+    /**
+     * The defect this guards: the stock used to be held only through a separate admin call, so a
+     * normal order stayed NEW forever and never reached RESERVED on its own.
+     */
+    @Test
+    void createOrder_shouldReserveStockOnCreation() {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(eq("product-1"), eq(2), anyString())).thenReturn(true);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderService.createOrder(sampleRequest());
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository, atLeastOnce()).save(captor.capture());
+        String orderId = captor.getValue().getId();
+        verify(inventoryClient).reserve("product-1", 2, orderId);
+    }
+
     @Test
     void createOrder_shouldRejectWhenStockInsufficient() {
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(false);
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(anyString(), anyInt(), anyString())).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> orderService.createOrder(sampleRequest()));
 
         assertTrue(ex.getMessage().contains("Insufficient inventory"));
-        verify(orderRepository, never()).save(any(Order.class));
+        // Nothing was reserved, so there is nothing to compensate
+        verify(inventoryClient, never()).release(anyString(), anyInt(), anyString());
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
+    }
+
+    /**
+     * A partly reserved order must give back what it already took: the exception rolls the order
+     * back, and the stock would otherwise stay held for an order that does not exist.
+     */
+    @Test
+    void createOrder_shouldCompensatePartiallyReservedItems() {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(eq("product-1"), eq(2), anyString())).thenReturn(true);
+        when(inventoryClient.reserve(eq("product-2"), eq(3), anyString())).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrder(twoItemRequest()));
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository, atLeastOnce()).save(captor.capture());
+        String orderId = captor.getValue().getId();
+        verify(inventoryClient).release("product-1", 2, orderId);
+        verify(inventoryClient, never()).release(eq("product-2"), anyInt(), anyString());
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
+    }
+
+    /** A failing inventory call is not a rejection by stock; it must surface as a conflict. */
+    @Test
+    void createOrder_shouldCompensateWhenInventoryCallFails() {
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(anyString(), anyInt(), anyString()))
+                .thenThrow(new ResourceAccessException("connection refused"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThrows(IllegalStateException.class,
+                () -> orderService.createOrder(sampleRequest()));
+
+        verify(outboxService, never()).append(anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -179,9 +261,9 @@ class OrderServiceTest {
         CreateOrderRequest request = sampleRequest();
         request.setIdempotencyKey("key-1");
         when(idempotencyKeyRepository.findByKey("key-1")).thenReturn(Optional.empty());
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenReturn(Map.of("price", "10.00"));
+        when(inventoryClient.reserve(anyString(), anyInt(), anyString())).thenReturn(true);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         orderService.createOrder(request);
@@ -245,7 +327,6 @@ class OrderServiceTest {
 
     @Test
     void createOrder_shouldRejectUnknownProduct() {
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenThrow(new HttpClientErrorException(HttpStatus.NOT_FOUND));
 
@@ -258,7 +339,6 @@ class OrderServiceTest {
 
     @Test
     void createOrder_shouldRejectProductWithoutPrice() {
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenReturn(Map.of("productId", "product-1"));
 
@@ -271,7 +351,6 @@ class OrderServiceTest {
 
     @Test
     void createOrder_shouldNotCreateFreeOrderForUnavailableCatalogue() {
-        when(inventoryClient.hasStock(anyString(), anyInt())).thenReturn(true);
         when(restTemplate.getForObject(anyString(), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("connection refused"));
 
