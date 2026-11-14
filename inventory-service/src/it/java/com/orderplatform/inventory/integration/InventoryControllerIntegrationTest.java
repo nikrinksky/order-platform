@@ -208,8 +208,70 @@ class InventoryControllerIntegrationTest extends AbstractInventoryIntegrationTes
                 .isEqualTo(0);
     }
 
-    /** Releasing an order that reserved nothing must leave the stock of the other orders alone. */
+    /**
+     * The defect this guards: an order that reached COMPLETED kept its reservation, so the goods
+     * stayed out of circulation for good.
+     */
     @Test
+    void shouldWriteOffStockWhenCommitted() throws Exception {
+        inventoryItemRepository.save(InventoryItem.builder()
+                .id("inv-1")
+                .productId("prod-1")
+                .quantity(100)
+                .reserved(0)
+                .available(true)
+                .build());
+
+        mockMvc.perform(post("/api/inventory/reserve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"orderId": "order-1", "productId": "prod-1", "quantity": 10}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/inventory/commit")
+                        .param("orderId", "order-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.committed").value(true))
+                .andExpect(jsonPath("$.itemsCommitted").value(1));
+
+        InventoryItem item = inventoryItemRepository.findByProductId("prod-1").orElseThrow();
+        assertThat(item.getQuantity()).isEqualTo(90);
+        assertThat(item.getReserved()).isZero();
+    }
+
+    /** A retry after a timeout must not write the same goods off a second time. */
+    @Test
+    void shouldNotCommitTwice() throws Exception {
+        inventoryItemRepository.save(InventoryItem.builder()
+                .id("inv-1")
+                .productId("prod-1")
+                .quantity(100)
+                .reserved(0)
+                .available(true)
+                .build());
+
+        mockMvc.perform(post("/api/inventory/reserve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"orderId": "order-1", "productId": "prod-1", "quantity": 10}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/inventory/commit").param("orderId", "order-1"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/inventory/commit").param("orderId", "order-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.committed").value(true))
+                .andExpect(jsonPath("$.itemsCommitted").value(0));
+
+        InventoryItem item = inventoryItemRepository.findByProductId("prod-1").orElseThrow();
+        assertThat(item.getQuantity()).isEqualTo(90);
+        assertThat(item.getReserved()).isZero();
+    }
+
+    /** Releasing an order that reserved nothing must leave the stock of the other orders alone. */    @Test
     void shouldNotReleaseReservationOfAnotherOrder() throws Exception {
         inventoryItemRepository.save(InventoryItem.builder()
                 .id("inv-1")

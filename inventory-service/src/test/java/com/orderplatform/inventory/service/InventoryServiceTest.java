@@ -1,5 +1,6 @@
 package com.orderplatform.inventory.service;
 
+import com.orderplatform.inventory.dto.CommitResponse;
 import com.orderplatform.inventory.dto.ReservationRequest;
 import com.orderplatform.inventory.dto.ReservationResponse;
 import com.orderplatform.inventory.model.InventoryItem;
@@ -11,10 +12,12 @@ import com.orderplatform.outbox.OutboxService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -330,9 +333,92 @@ class InventoryServiceTest {
                 () -> inventoryService.release(ORDER_ID, "nonexistent", 5));
     }
 
+    /**
+     * The defect this guards: completing an order left the reservation in place, so the stock
+     * stayed out of circulation although the goods had shipped.
+     */
     @Test
-    void createOrUpdate_shouldCreateNewItem() {
-        when(inventoryItemRepository.findByProductIdForUpdate(PRODUCT_ID)).thenReturn(Optional.empty());
+    void commit_shouldWriteOffBothQuantityAndReserved() {
+        InventoryItem item = sampleItem();
+        item.setReserved(5);
+        Reservation active = reservation(ReservationStatus.ACTIVE, 5);
+        when(reservationRepository.findByOrderIdAndStatus(ORDER_ID, ReservationStatus.ACTIVE))
+                .thenReturn(List.of(active));
+        when(inventoryItemRepository.findByProductIdForUpdate(PRODUCT_ID)).thenReturn(Optional.of(item));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CommitResponse response = inventoryService.commit(ORDER_ID);
+
+        assertTrue(response.isCommitted());
+        assertEquals(1, response.getItemsCommitted());
+        // The goods are gone: the units leave the total as well as the hold, unlike a release.
+        assertEquals(15, item.getQuantity());
+        assertEquals(0, item.getReserved());
+        assertEquals(ReservationStatus.COMMITTED, active.getStatus());
+    }
+
+    /** A retry after a timeout must not write the same goods off twice. */
+    @Test
+    void commit_shouldBeIdempotentForTheSameOrder() {
+        when(reservationRepository.findByOrderIdAndStatus(ORDER_ID, ReservationStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        CommitResponse response = inventoryService.commit(ORDER_ID);
+
+        assertTrue(response.isCommitted());
+        assertEquals(0, response.getItemsCommitted());
+        assertEquals("No active reservation to commit", response.getMessage());
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
+    /** A cancelled order has nothing to write off, and must not touch the stock. */
+    @Test
+    void commit_shouldIgnoreReleasedReservations() {
+        when(reservationRepository.findByOrderIdAndStatus(ORDER_ID, ReservationStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        inventoryService.commit(ORDER_ID);
+
+        verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
+    }
+
+    /** A multi-item order locks its products in a stable order, so two commits cannot deadlock. */
+    @Test
+    void commit_shouldWriteOffEveryActiveReservationInProductOrder() {
+        Reservation second = Reservation.builder()
+                .id("res-2").orderId(ORDER_ID).productId("product-2")
+                .quantity(3).status(ReservationStatus.ACTIVE).build();
+        Reservation first = Reservation.builder()
+                .id("res-1").orderId(ORDER_ID).productId("product-1")
+                .quantity(2).status(ReservationStatus.ACTIVE).build();
+        when(reservationRepository.findByOrderIdAndStatus(ORDER_ID, ReservationStatus.ACTIVE))
+                .thenReturn(List.of(second, first));
+        when(inventoryItemRepository.findByProductIdForUpdate(anyString()))
+                .thenAnswer(inv -> Optional.of(InventoryItem.builder()
+                        .id("inv-" + inv.getArgument(0))
+                        .productId(inv.getArgument(0))
+                        .quantity(10)
+                        .reserved(5)
+                        .available(true)
+                        .build()));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CommitResponse response = inventoryService.commit(ORDER_ID);
+
+        assertEquals(2, response.getItemsCommitted());
+        InOrder order = inOrder(inventoryItemRepository);
+        order.verify(inventoryItemRepository).findByProductIdForUpdate("product-1");
+        order.verify(inventoryItemRepository).findByProductIdForUpdate("product-2");
+    }
+
+    @Test
+    void commit_shouldRejectBlankOrderId() {
+        assertThrows(IllegalArgumentException.class, () -> inventoryService.commit(" "));
+        verifyNoInteractions(reservationRepository);
+    }
+
+    @Test
+    void createOrUpdate_shouldCreateNewItem() {        when(inventoryItemRepository.findByProductIdForUpdate(PRODUCT_ID)).thenReturn(Optional.empty());
         when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         InventoryItem item = inventoryService.createOrUpdate(PRODUCT_ID, 100);

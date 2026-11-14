@@ -203,7 +203,8 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
      */
     private boolean isInternalPath(String path) {
         return path.startsWith("/api/inventory/reserve") ||
-                path.startsWith("/api/inventory/release");
+                path.startsWith("/api/inventory/release") ||
+                path.startsWith("/api/inventory/commit");
     }
 
     private Key getSignInKey() {

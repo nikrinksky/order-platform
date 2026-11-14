@@ -33,7 +33,8 @@ public class SecurityConfig {
                         // called by order-service on behalf of an administrator or a manager,
                         // which relays the caller's token.
                         .requestMatchers(HttpMethod.POST, "/api/inventory/reserve",
-                                "/api/inventory/release").hasAnyRole("ADMIN", "MANAGER")
+                                "/api/inventory/release", "/api/inventory/commit")
+                        .hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/inventory/product/**").permitAll()
                         .anyRequest().authenticated()
                 )

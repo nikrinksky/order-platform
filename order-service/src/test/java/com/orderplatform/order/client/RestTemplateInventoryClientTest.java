@@ -114,4 +114,31 @@ class RestTemplateInventoryClientTest {
 
         assertThatCode(() -> client().release("p1", 5, "order-1")).doesNotThrowAnyException();
     }
+
+    @Test
+    void commitReturnsTrueWhenInventoryConfirmsWriteOff() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Map.class)))
+                .thenReturn(Map.of("committed", true, "itemsCommitted", 1));
+
+        assertThat(client().commit("order-1")).isTrue();
+    }
+
+    @Test
+    void commitReturnsFalseWhenInventoryReturnsNoBody() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Map.class))).thenReturn(null);
+
+        assertThat(client().commit("order-1")).isFalse();
+    }
+
+    /**
+     * Unlike a release, a failed write-off must not be swallowed: the order cannot be completed
+     * while the stock still looks reserved, so the caller has to see the failure.
+     */
+    @Test
+    void commitReturnsFalseWhenInventoryIsUnreachable() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("connection refused"));
+
+        assertThat(client().commit("order-1")).isFalse();
+    }
 }
