@@ -147,7 +147,8 @@ public class OrderService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (RuntimeException e) {
-            log.error("Order {} - inventory call failed while reserving: {}", order.getId(), e.toString());
+            log.error("Order {} - inventory call failed while reserving the stock of a new order",
+                    order.getId(), e);
             releaseReservations(order.getId(), reserved);
             throw new IllegalStateException(
                     "Could not reserve stock for order " + order.getId(), e);
@@ -183,8 +184,8 @@ public class OrderService {
                 successfullyReserved.add(item);
             }
         } catch (RuntimeException e) {
-            log.error("Order {} - inventory call failed while reserving: {}",
-                    orderId, e.toString());
+            log.error("Order {} - inventory call failed while reserving an existing order",
+                    orderId, e);
             reserveFailed = true;
         }
 
