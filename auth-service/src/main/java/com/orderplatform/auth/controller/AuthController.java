@@ -5,6 +5,7 @@ import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UpdateRolesRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.TokenRevocationUnavailableException;
 import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
@@ -28,7 +29,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -98,7 +98,8 @@ public class AuthController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Tokens refreshed successfully"),
             @ApiResponse(responseCode = "400", description = "Missing tokens"),
-            @ApiResponse(responseCode = "401", description = "Invalid tokens")
+            @ApiResponse(responseCode = "401", description = "Invalid tokens"),
+            @ApiResponse(responseCode = "503", description = "The old tokens could not be revoked")
     })
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refreshToken(
@@ -137,6 +138,12 @@ public class AuthController {
             // Revoke both old tokens and generate new ones
             Map<String, Object> response = authenticationService.refreshToken(accessToken, refreshToken);
             return ResponseEntity.ok(response);
+        } catch (TokenRevocationUnavailableException e) {
+            // The old pair is still alive: handing out new tokens would replace tokens that
+            // cannot be revoked, so the failure is reported instead of disguised as 401
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Token revocation is unavailable, retry later");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("error", "Invalid tokens: " + e.getMessage());
@@ -166,7 +173,8 @@ public class AuthController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully logged out"),
             @ApiResponse(responseCode = "400", description = "Missing tokens"),
-            @ApiResponse(responseCode = "401", description = "Invalid token")
+            @ApiResponse(responseCode = "401", description = "Invalid token"),
+            @ApiResponse(responseCode = "503", description = "The tokens could not be revoked")
     })
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(@RequestHeader("Authorization") String authHeader,
@@ -202,6 +210,12 @@ public class AuthController {
             response.put("accessTokenRevoked", "true");
             response.put("refreshTokenRevoked", "true");
             return ResponseEntity.ok(response);
+        } catch (TokenRevocationUnavailableException e) {
+            // Reported as an outage, not as a logout: the tokens are still usable, and a client
+            // told otherwise would stop retrying and keep them
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Token revocation is unavailable, retry later");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", "Logout failed: " + e.getMessage());

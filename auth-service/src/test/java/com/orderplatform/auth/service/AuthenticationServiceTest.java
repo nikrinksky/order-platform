@@ -1,6 +1,7 @@
 package com.orderplatform.auth.service;
 
 import com.orderplatform.auth.dto.LoginRequest;
+import com.orderplatform.auth.exception.TokenRevocationUnavailableException;
 import com.orderplatform.auth.model.Role;
 import com.orderplatform.auth.model.User;
 import com.orderplatform.auth.repository.UserRepository;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -322,8 +324,12 @@ class AuthenticationServiceTest {
                 .blacklistToken(eq(oldAccessToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
     }
 
+    /**
+     * A token whose expiration cannot be read is not revoked: it is malformed or already expired,
+     * and both are rejected without a blacklist entry. The refresh itself still succeeds.
+     */
     @Test
-    void testRefreshToken_ShouldSucceedWhenRevocationFails() {
+    void testRefreshToken_ShouldSucceedWhenTheOldTokenCannotBeRead() {
         String oldAccessToken = "old-access-token";
         String oldRefreshToken = "old-refresh-token";
 
@@ -335,13 +341,40 @@ class AuthenticationServiceTest {
         when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
         when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
-        // Redis is unreachable while the token is being revoked
         when(jwtService.getExpirationFromTokenAllowingExpired(any(String.class)))
-                .thenThrow(new RuntimeException("Redis is down"));
+                .thenThrow(new RuntimeException("malformed token"));
 
         Map<String, Object> response = authenticationService.refreshToken(oldAccessToken, oldRefreshToken);
 
         assertThat(response.get("accessToken")).isEqualTo("new-access-token");
+    }
+
+    /**
+     * The defect this guards: a Redis outage during rotation was swallowed, so the response handed
+     * out a new pair while the old one stayed usable - the client believed it had rotated.
+     */
+    @Test
+    void testRefreshToken_ShouldFailWhenTheBlacklistIsUnavailable() {
+        String oldAccessToken = "old-access-token";
+        String oldRefreshToken = "old-refresh-token";
+
+        when(jwtService.isRefreshToken(oldRefreshToken)).thenReturn(true);
+        when(tokenBlacklistService.isTokenBlacklisted(oldRefreshToken)).thenReturn(false);
+        when(jwtService.extractUsername(oldRefreshToken)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(jwtService.isRefreshTokenValid(oldRefreshToken)).thenReturn(true);
+        when(jwtService.generateToken(any(Map.class), eq(userDetails))).thenReturn("new-access-token");
+        when(jwtService.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        when(jwtService.getExpirationFromTokenAllowingExpired(oldAccessToken))
+                .thenReturn(System.currentTimeMillis() + 60000);
+        doThrow(new TokenRevocationUnavailableException("Token revocation is unavailable",
+                new RuntimeException("Redis down")))
+                .when(tokenBlacklistService)
+                .blacklistToken(eq(oldAccessToken), org.mockito.ArgumentMatchers.anyLong());
+
+        assertThrows(TokenRevocationUnavailableException.class,
+                () -> authenticationService.refreshToken(oldAccessToken, oldRefreshToken));
     }
 
     @Test
@@ -379,6 +412,22 @@ class AuthenticationServiceTest {
 
         org.mockito.Mockito.verify(tokenBlacklistService)
                 .blacklistToken(eq(refreshToken), org.mockito.ArgumentMatchers.longThat(ttl -> ttl > 0));
+    }
+
+    @Test
+    void testLogout_ShouldFailWhenTheBlacklistIsUnavailable() {
+        String accessToken = "access-token";
+
+        when(jwtService.extractUsername(accessToken)).thenReturn("test@example.com");
+        when(jwtService.getExpirationFromTokenAllowingExpired(accessToken))
+                .thenReturn(System.currentTimeMillis() + 100000);
+        doThrow(new TokenRevocationUnavailableException("Token revocation is unavailable",
+                new RuntimeException("Redis down")))
+                .when(tokenBlacklistService)
+                .blacklistToken(eq(accessToken), org.mockito.ArgumentMatchers.anyLong());
+
+        assertThrows(TokenRevocationUnavailableException.class,
+                () -> authenticationService.logout(accessToken, null));
     }
 
     @Test

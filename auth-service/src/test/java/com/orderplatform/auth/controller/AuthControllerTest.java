@@ -3,6 +3,7 @@ package com.orderplatform.auth.controller;
 import com.orderplatform.auth.dto.LoginRequest;
 import com.orderplatform.auth.dto.RegisterRequest;
 import com.orderplatform.auth.dto.UserDto;
+import com.orderplatform.auth.exception.TokenRevocationUnavailableException;
 import com.orderplatform.auth.exception.UserAlreadyExistsException;
 import com.orderplatform.auth.exception.UserNotFoundException;
 import com.orderplatform.auth.service.AuthenticationService;
@@ -146,18 +147,33 @@ class AuthControllerTest {
     }
 
     @Test
-    void testRefresh_Success() throws Exception {
+    void testRefresh_PlainTokens_Works() throws Exception {
         Map<String, Object> response = new HashMap<>();
         response.put("accessToken", "new-token");
-        response.put("refreshToken", "new-refresh");
 
         when(authenticationService.refreshToken("access-token", "refresh-token")).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/refresh")
+                        .header("Authorization", "access-token")
+                        .header("X-Refresh-Token", "refresh-token"))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * The defect this guards: the tokens could not be revoked, yet the caller was told the refresh
+     * succeeded - with a pair that replaced tokens still usable.
+     */
+    @Test
+    void testRefresh_RevocationUnavailable_ReturnsServiceUnavailable() throws Exception {
+        when(authenticationService.refreshToken("access-token", "refresh-token"))
+                .thenThrow(new TokenRevocationUnavailableException(
+                        "Token revocation is unavailable", new RuntimeException("Redis down")));
+
+        mockMvc.perform(post("/api/auth/refresh")
                         .header("Authorization", "Bearer access-token")
                         .header("X-Refresh-Token", "Bearer refresh-token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").value("new-token"));
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("Token revocation is unavailable, retry later"));
     }
 
     @Test
@@ -184,19 +200,6 @@ class AuthControllerTest {
                         .header("X-Refresh-Token", "refresh-token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid tokens: Invalid token type"));
-    }
-
-    @Test
-    void testRefresh_PlainTokens_Works() throws Exception {
-        Map<String, Object> response = new HashMap<>();
-        response.put("accessToken", "new-token");
-
-        when(authenticationService.refreshToken("access-token", "refresh-token")).thenReturn(response);
-
-        mockMvc.perform(post("/api/auth/refresh")
-                        .header("Authorization", "access-token")
-                        .header("X-Refresh-Token", "refresh-token"))
-                .andExpect(status().isOk());
     }
 
     @Test
@@ -267,8 +270,25 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/api/auth/logout")
                         .header("Authorization", "Bearer access-token")
-                        .header("X-Refresh-Token", "refresh-token"))
+                        .header("X-Refresh-Token", "Bearer refresh-token"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("Logout failed: Redis down"));
+    }
+
+    /**
+     * The defect this guards: logout answered {@code 200} with {@code accessTokenRevoked: true}
+     * although nothing was written to the blacklist, so the client stopped retrying.
+     */
+    @Test
+    void testLogout_RevocationUnavailable_ReturnsServiceUnavailable() throws Exception {
+        org.mockito.Mockito.doThrow(new TokenRevocationUnavailableException(
+                        "Token revocation is unavailable", new RuntimeException("Redis down")))
+                .when(authenticationService).logout(anyString(), anyString());
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer access-token")
+                        .header("X-Refresh-Token", "Bearer refresh-token"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("Token revocation is unavailable, retry later"));
     }
 }
