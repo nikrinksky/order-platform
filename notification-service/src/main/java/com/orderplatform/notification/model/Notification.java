@@ -44,4 +44,19 @@ public class Notification {
     private LocalDateTime createdAt;
 
     private LocalDateTime sentAt;
+
+    /**
+     * How many delivery attempts have been made so far. A notification that could not be handed to
+     * the mail server keeps its record and is retried, so the count is what eventually stops it.
+     */
+    private int attempts;
+
+    /** Why the last attempt failed; cleared once the message goes out. */
+    private String lastError;
+
+    /**
+     * When the next attempt is due. {@code null} means nothing is scheduled: the notification was
+     * either delivered, or the attempts ran out and it is left unsent for inspection.
+     */
+    private LocalDateTime nextAttemptAt;
 }

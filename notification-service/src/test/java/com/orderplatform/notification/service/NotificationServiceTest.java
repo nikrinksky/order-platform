@@ -6,16 +6,18 @@ import com.orderplatform.notification.model.Notification;
 import com.orderplatform.notification.model.UserContact;
 import com.orderplatform.notification.repository.NotificationRepository;
 import com.orderplatform.notification.repository.UserContactRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,6 +40,13 @@ class NotificationServiceTest {
     @InjectMocks
     private NotificationService notificationService;
 
+    @BeforeEach
+    void setUp() {
+        // Field-injected policy values; the retry behaviour below is what depends on them
+        ReflectionTestUtils.setField(notificationService, "maxAttempts", 3);
+        ReflectionTestUtils.setField(notificationService, "backoffMs", 1000L);
+    }
+
     @Test
     void onOrderCreated_shouldCreateNotification() {
         OrderCreatedEvent event = orderCreated();
@@ -54,17 +63,81 @@ class NotificationServiceTest {
         when(notificationRepository.save(any(Notification.class))).thenReturn(savedNotification);
 
         assertDoesNotThrow(() -> notificationService.onOrderCreated(event, "event-1"));
-        verify(notificationRepository, times(1)).save(any(Notification.class));
+        // Stored, and then once more when the delivery attempt is recorded
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(saved.capture());
+        assertEquals("ORDER_CREATED", saved.getAllValues().get(0).getType());
     }
 
     @Test
-    void onOrderCreated_shouldDropRedeliveryOfKnownEvent() {
+    void onOrderCreated_shouldDropRedeliveryOfDeliveredNotification() {
         when(notificationRepository.findByEventId("event-1"))
-                .thenReturn(Optional.of(Notification.builder().id("notif-1").build()));
+                .thenReturn(Optional.of(Notification.builder()
+                        .id("notif-1")
+                        .userId("user-1")
+                        .sent(true)
+                        .attempts(1)
+                        .build()));
 
         notificationService.onOrderCreated(orderCreated(), "event-1");
 
         verify(notificationRepository, never()).save(any(Notification.class));
+        verify(emailSender, never()).send(anyString(), anyString(), anyString());
+    }
+
+    /**
+     * A redelivery of an event whose notification never went out is a free attempt: dropping it
+     * would leave the user without the message until the scheduled retry, and before the job
+     * existed - forever.
+     */
+    @Test
+    void onOrderCreated_shouldRetryDeliveryOfUnsentNotificationOnRedelivery() {
+        Notification stored = Notification.builder()
+                .id("notif-1")
+                .userId("user-1")
+                .eventId("event-1")
+                .subject("Order Created")
+                .body("body")
+                .sent(false)
+                .attempts(1)
+                .lastError("connection refused")
+                .build();
+        when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.of(stored));
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+
+        notificationService.onOrderCreated(orderCreated(), "event-1");
+
+        // The stored record is delivered, not replaced by a second one
+        verify(notificationRepository, times(1)).save(any(Notification.class));
+        verify(notificationRepository).save(stored);
+        assertTrue(stored.isSent(), "the stored notification is the one that went out");
+        assertEquals(2, stored.getAttempts());
+        assertNull(stored.getLastError());
+        verify(emailSender).send(eq("buyer@example.com"), anyString(), anyString());
+    }
+
+    /** The attempts are bounded, so a redelivery must not spend a sixth one. */
+    @Test
+    void onOrderCreated_shouldNotRetryRedeliveryAfterAttemptsRunOut() {
+        when(notificationRepository.findByEventId("event-1"))
+                .thenReturn(Optional.of(Notification.builder()
+                        .id("notif-1")
+                        .userId("user-1")
+                        .sent(false)
+                        .attempts(3)
+                        .lastError("mailbox unavailable")
+                        .build()));
+
+        notificationService.onOrderCreated(orderCreated(), "event-1");
+
+        verify(notificationRepository, never()).save(any(Notification.class));
+        verify(emailSender, never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -88,7 +161,9 @@ class NotificationServiceTest {
         when(notificationRepository.save(any(Notification.class))).thenReturn(savedNotification);
 
         assertDoesNotThrow(() -> notificationService.onOrderStatusChanged(event, "event-2"));
-        verify(notificationRepository, times(1)).save(any(Notification.class));
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(saved.capture());
+        assertEquals("ORDER_STATUS_CHANGED", saved.getAllValues().get(0).getType());
     }
 
     @Test
@@ -103,11 +178,12 @@ class NotificationServiceTest {
                 .build();
 
         when(notificationRepository.save(any(Notification.class)))
-                .thenReturn(Notification.builder().id("notif-1").build());
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         notificationService.onOrderStatusChanged(event, null);
 
-        verify(notificationRepository, times(1)).save(any(Notification.class));
+        // Stored without an event id, then once more when the delivery attempt is recorded
+        verify(notificationRepository, times(2)).save(any(Notification.class));
     }
 
     private static OrderCreatedEvent orderCreated() {
@@ -218,17 +294,18 @@ class NotificationServiceTest {
         notificationService.onOrderCreated(orderCreated(), "event-1");
 
         ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationRepository).save(saved.capture());
+        verify(notificationRepository, times(2)).save(saved.capture());
         assertFalse(saved.getValue().isSent());
         verify(emailSender, never()).send(anyString(), anyString(), anyString());
     }
 
     /**
-     * A refused message has to surface as a failure. Reporting it as sent would lose the
-     * notification: the offset would be acknowledged and nothing would ever retry it.
+     * The defect this guards: the store and the send were one transaction, so a mail server
+     * failure rolled the notification back and left nothing to retry - the event ended on the
+     * dead letter topic instead.
      */
     @Test
-    void onOrderCreated_shouldPropagateSendFailureSoTheEventIsRetried() {
+    void onOrderCreated_shouldKeepTheRecordAndScheduleARetryWhenSendFails() {
         when(notificationRepository.findByEventId("event-1")).thenReturn(Optional.empty());
         when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -240,8 +317,97 @@ class NotificationServiceTest {
         doThrow(new RuntimeException("mail server refused the message"))
                 .when(emailSender).send(anyString(), anyString(), anyString());
 
-        assertThrows(RuntimeException.class,
-                () -> notificationService.onOrderCreated(orderCreated(), "event-1"));
+        // Not thrown: the record is durable, so the offset may be acknowledged and the retry job
+        // owns the next attempt
+        assertDoesNotThrow(() -> notificationService.onOrderCreated(orderCreated(), "event-1"));
+
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(saved.capture());
+        Notification kept = saved.getValue();
+        assertFalse(kept.isSent(), "a failed send must not be recorded as delivered");
+        assertEquals(1, kept.getAttempts());
+        assertEquals("mail server refused the message", kept.getLastError());
+        assertNotNull(kept.getNextAttemptAt(), "a retry has to be scheduled");
+    }
+
+    /** The retry has to stop somewhere: after the last attempt nothing is scheduled any more. */
+    @Test
+    void deliver_shouldGiveUpAfterTheLastAttempt() {
+        Notification notification = Notification.builder()
+                .id("notif-1")
+                .userId("user-1")
+                .subject("Order Created")
+                .body("body")
+                .attempts(2)
+                .nextAttemptAt(LocalDateTime.now().minusMinutes(1))
+                .build();
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+        doThrow(new RuntimeException("mailbox unavailable"))
+                .when(emailSender).send(anyString(), anyString(), anyString());
+
+        notificationService.deliver(notification);
+
+        assertEquals(3, notification.getAttempts());
+        assertNull(notification.getNextAttemptAt(), "no attempt is left, nothing may be scheduled");
+        assertFalse(notification.isSent());
+        assertEquals("mailbox unavailable", notification.getLastError());
+    }
+
+    /** A successful retry clears the schedule and the previous error. */
+    @Test
+    void deliver_shouldMarkSentAndClearTheScheduleOnSuccess() {
+        Notification notification = Notification.builder()
+                .id("notif-1")
+                .userId("user-1")
+                .subject("Order Created")
+                .body("body")
+                .attempts(1)
+                .lastError("connection refused")
+                .nextAttemptAt(LocalDateTime.now().minusMinutes(1))
+                .build();
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+
+        notificationService.deliver(notification);
+
+        assertTrue(notification.isSent());
+        assertNotNull(notification.getSentAt());
+        assertNull(notification.getNextAttemptAt());
+        assertNull(notification.getLastError());
+        verify(notificationRepository).save(notification);
+    }
+
+    /** The delay grows with each failure, so a mail server that is down is not hit every minute. */
+    @Test
+    void deliver_shouldBackOffFurtherAfterEachFailure() {
+        Notification notification = Notification.builder()
+                .id("notif-1")
+                .userId("user-1")
+                .subject("Order Created")
+                .body("body")
+                .attempts(1)
+                .build();
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+        doThrow(new RuntimeException("mailbox unavailable"))
+                .when(emailSender).send(anyString(), anyString(), anyString());
+
+        LocalDateTime before = LocalDateTime.now();
+        notificationService.deliver(notification);
+
+        // Second attempt waits 2x the base delay of 1s
+        assertTrue(notification.getNextAttemptAt().isAfter(before.plusNanos(1_500_000_000L)),
+                "the second attempt waits longer than the base delay");
     }
 
     @Test
