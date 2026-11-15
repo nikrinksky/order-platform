@@ -47,6 +47,14 @@ notification:
   email:
     enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
     from: ${NOTIFICATION_EMAIL_FROM:no-reply@order-platform.local}
+  # A notification that could not be handed to the mail server is retried by a scheduled job.
+  # The delay doubles after each failure, and the notification is left unsent once the attempts
+  # run out - visible in the history instead of being retried forever.
+  retry:
+    enabled: ${NOTIFICATION_RETRY_ENABLED:true}
+    interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:60000}
+    max-attempts: ${NOTIFICATION_RETRY_MAX_ATTEMPTS:5}
+    backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:60000}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}

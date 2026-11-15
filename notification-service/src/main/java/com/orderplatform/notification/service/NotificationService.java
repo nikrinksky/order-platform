@@ -8,6 +8,7 @@ import com.orderplatform.notification.repository.NotificationRepository;
 import com.orderplatform.notification.repository.UserContactRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,15 +27,27 @@ public class NotificationService {
     private final UserContactRepository userContactRepository;
     private final EmailSender emailSender;
 
+    /** Delivery attempts before a notification is left unsent for inspection. */
+    @Value("${notification.retry.max-attempts:5}")
+    private int maxAttempts;
+
+    /** Base delay between attempts; doubles after each failure. */
+    @Value("${notification.retry.backoff-ms:60000}")
+    private long backoffMs;
+
     /**
-     * Stores the notification for a created order.
+     * Stores the notification for a created order and tries to deliver it.
+     *
+     * <p>Not transactional on purpose: the record is written first and committed on its own, so a
+     * mail server failure cannot roll it back. It used to be one transaction, which meant a
+     * transient SMTP outage erased the notification entirely - the event was then retried by
+     * Kafka a few times and parked on the DLT, and nothing was left to retry or inspect.
      *
      * @param eventId delivery id of the Kafka record; null when the producer sent no id, in
      *                which case a redelivery would be stored again - there is nothing to match on
      */
-    @Transactional
     public void onOrderCreated(OrderCreatedEvent event, String eventId) {
-        if (isRedelivery("order.created", eventId)) {
+        if (handledAsRedelivery("order.created", eventId)) {
             return;
         }
         log.info("Processing order created event for order: {}", event.getOrderId());
@@ -48,6 +62,8 @@ public class NotificationService {
                 .channel("EMAIL")
                 .sent(false)
                 .createdAt(LocalDateTime.now())
+                // Due right away: a crash between the write and the send is picked up by the retry
+                .nextAttemptAt(LocalDateTime.now())
                 .build();
 
         notificationRepository.save(notification);
@@ -55,9 +71,8 @@ public class NotificationService {
         deliver(notification);
     }
 
-    @Transactional
     public void onOrderStatusChanged(OrderStatusChangedEvent event, String eventId) {
-        if (isRedelivery("order.status-changed", eventId)) {
+        if (handledAsRedelivery("order.status-changed", eventId)) {
             return;
         }
         log.info("Processing order status changed event for order: {}", event.getOrderId());
@@ -72,6 +87,7 @@ public class NotificationService {
                 .channel("EMAIL")
                 .sent(false)
                 .createdAt(LocalDateTime.now())
+                .nextAttemptAt(LocalDateTime.now())
                 .build();
 
         notificationRepository.save(notification);
@@ -80,36 +96,70 @@ public class NotificationService {
     }
 
     /**
-     * Sends the notification to its recipient and records that it went out.
+     * Attempts one delivery and records the outcome.
      *
-     * <p>Sent straight from the consumer rather than handed to a background job: the caller
-     * acknowledges the Kafka offset only after this returns, so a failure keeps the event on the
-     * topic and the retry redelivers it. Marking the notification sent is the last step - a
-     * notification that could not be handed to the mail server stays unsent and is visible as
-     * such.
+     * <p>A failure is not thrown: the notification is already stored, so the Kafka offset may be
+     * acknowledged and the retry job owns the next attempt. Throwing would only make the listener
+     * replay the event, which spends one of its bounded retries on an attempt the job would make
+     * anyway - and the redelivery is used for that instead, see
+     * {@link #handledAsRedelivery(String, String)}.
      *
-     * <p>When no address is known the notification is stored unsent and logged instead of being
-     * dropped: the contact projection may simply not have caught up yet, and the record still has
-     * to be readable in the notification history.
+     * <p>When no address is known the attempt is recorded as failed too, so the notification is
+     * picked up again once the contact projection catches up instead of staying unsent forever.
      *
      * @param notification the stored notification to deliver
-     * @throws RuntimeException when the mail server rejects the message, so the delivery is
-     *                          retried rather than silently reported as done
      */
-    private void deliver(Notification notification) {
+    public void deliver(Notification notification) {
         String email = addressOf(notification.getUserId());
         if (email == null) {
-            log.warn("No email known for user {}, notification {} stays unsent",
-                    notification.getUserId(), notification.getId());
+            recordFailure(notification, "no email known for user " + notification.getUserId());
             return;
         }
 
-        emailSender.send(email, notification.getSubject(), notification.getBody());
+        try {
+            emailSender.send(email, notification.getSubject(), notification.getBody());
+        } catch (RuntimeException e) {
+            recordFailure(notification, e.getMessage());
+            return;
+        }
 
         notification.setSent(true);
         notification.setSentAt(LocalDateTime.now());
+        notification.setAttempts(notification.getAttempts() + 1);
+        notification.setLastError(null);
+        notification.setNextAttemptAt(null);
         notificationRepository.save(notification);
-        log.info("Notification {} sent to {}", notification.getId(), email);
+        log.info("Notification {} sent to {} after {} attempt(s)",
+                notification.getId(), email, notification.getAttempts());
+    }
+
+    /**
+     * Keeps the record, notes why the attempt failed and schedules the next one.
+     *
+     * <p>The schedule is dropped once the attempts run out: the notification stays {@code sent=false}
+     * with the last error attached, which is visible in the notification history, instead of being
+     * retried forever against a mail server that will not take it.
+     */
+    private void recordFailure(Notification notification, String error) {
+        int attempts = notification.getAttempts() + 1;
+        notification.setAttempts(attempts);
+        notification.setLastError(error);
+
+        if (attempts >= maxAttempts) {
+            notification.setNextAttemptAt(null);
+            notificationRepository.save(notification);
+            log.error("Notification {} could not be delivered in {} attempts, giving up: {}",
+                    notification.getId(), attempts, error);
+            return;
+        }
+
+        // Exponential backoff: 1x, 2x, 4x ... of the base delay, so a mail server that is down
+        // for a while is not hammered every minute.
+        long delay = backoffMs * (1L << Math.min(attempts - 1, 5));
+        notification.setNextAttemptAt(LocalDateTime.now().plusNanos(delay * 1_000_000));
+        notificationRepository.save(notification);
+        log.warn("Notification {} delivery failed (attempt {}/{}), retrying in {} ms: {}",
+                notification.getId(), attempts, maxAttempts, delay, error);
     }
 
     private String addressOf(String userId) {
@@ -123,20 +173,40 @@ public class NotificationService {
     }
 
     /**
-     * Tells whether this delivery was already processed.
+     * Recognises a redelivery and, when the earlier attempt never went out, makes another one.
      *
-     * <p>Delivery is at-least-once, so a redelivery has to be recognised and dropped. The event
-     * type is part of the message on purpose: one shared call site keeps the two consumers from
-     * producing log lines that cannot be told apart.
+     * <p>Delivery is at-least-once, so the same event can arrive twice. A stored record used to be
+     * dropped on sight, which is right only for a delivered one: for an undelivered notification
+     * the offset was acknowledged, the event was gone, and the record waited for the retry job.
+     * A redelivery is a free attempt, so it is used while the notification is still unsent and
+     * attempts are left.
      *
      * @param eventType topic the delivery came from, e.g. {@code order.created}
      * @param eventId   delivery id; null means the producer sent none and nothing can be matched
+     * @return true when the event needs no further processing
      */
-    private boolean isRedelivery(String eventType, String eventId) {
-        if (eventId == null || notificationRepository.findByEventId(eventId).isEmpty()) {
+    private boolean handledAsRedelivery(String eventType, String eventId) {
+        if (eventId == null) {
             return false;
         }
-        log.info("Dropping redelivery of {} event {}", eventType, eventId);
+        final Optional<Notification> existing = notificationRepository.findByEventId(eventId);
+        if (existing.isEmpty()) {
+            return false;
+        }
+        final Notification notification = existing.get();
+        if (notification.isSent()) {
+            log.info("Dropping redelivery of {} event {}: notification {} was already delivered",
+                    eventType, eventId, notification.getId());
+            return true;
+        }
+        if (notification.getAttempts() >= maxAttempts) {
+            log.warn("Dropping redelivery of {} event {}: notification {} used all {} attempts",
+                    eventType, eventId, notification.getId(), maxAttempts);
+            return true;
+        }
+        log.info("Redelivery of {} event {} retries the undelivered notification {}",
+                eventType, eventId, notification.getId());
+        deliver(notification);
         return true;
     }
 
