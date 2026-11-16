@@ -19,7 +19,7 @@ spring:
                 - StripPrefix=0
 
             - id: user-service
-              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              uri: ${USER_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/users/**
               filters:
@@ -59,6 +59,52 @@ spring:
                 - Path=/health, /info, /actuator/**
               filters:
                 - StripPrefix=0
+
+            # One route per service so the aggregated Swagger UI can fetch every document through
+            # the gateway. Each one rewrites the public path to the document path the service
+            # actually serves, which is /api-docs in auth-service and the springdoc default
+            # /v3/api-docs everywhere else.
+            - id: api-docs-auth
+              uri: ${AUTH_SERVICE_URL:http://localhost:8090}
+              predicates:
+                - Path=/api-docs/auth
+              filters:
+                - SetPath=/api-docs
+
+            - id: api-docs-user
+              uri: ${USER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api-docs/user
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: api-docs-product
+              uri: ${PRODUCT_SERVICE_URL:http://localhost:8089}
+              predicates:
+                - Path=/api-docs/product
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: api-docs-inventory
+              uri: ${INVENTORY_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api-docs/inventory
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: api-docs-order
+              uri: ${ORDER_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api-docs/order
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: api-docs-notification
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api-docs/notification
+              filters:
+                - SetPath=/v3/api-docs
       compatibility-verifier:
         enabled: false
   data:
@@ -79,6 +125,33 @@ gateway:
   # client chose, and trusting it would let one client hand itself a fresh rate-limit bucket on
   # every request. Fill this in when the gateway runs behind a known proxy or load balancer.
   trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}
+
+# The Swagger UI is served by the gateway itself and lists every service's document, so one page
+# covers the whole platform. The documents are fetched through the routes above.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+    display-request-duration: true
+    urls:
+      - name: auth
+        url: /api-docs/auth
+      - name: user
+        url: /api-docs/user
+      - name: product
+        url: /api-docs/product
+      - name: inventory
+        url: /api-docs/inventory
+      - name: order
+        url: /api-docs/order
+      - name: notification
+        url: /api-docs/notification
 
 management:
   endpoints:

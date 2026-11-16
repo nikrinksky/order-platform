@@ -55,8 +55,26 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
     private static final String USER_ROLES_HEADER = "X-User-Roles";
 
+    /** Paths the API documentation is served from: the aggregated UI and the per-service documents. */
+    private static final String[] DOCS_PATHS = {
+            "/swagger-ui",
+            "/swagger-ui.html",
+            "/webjars",
+            "/api-docs",
+            "/v3/api-docs"
+    };
+
     @Value("${jwt.secret}")
     private String secret;
+
+    /**
+     * Whether the documentation is exposed. Follows the springdoc switch, so turning the documents
+     * off with {@code SWAGGER_ENABLED=false} also closes them on the gateway - otherwise the filter
+     * would keep letting the paths through and the answer would be a 404 from downstream instead of
+     * an honest rejection.
+     */
+    @Value("${springdoc.api-docs.enabled:true}")
+    private boolean docsEnabled = true;
 
     /**
      * Optional: absent in a unit test or a deployment without Redis. When present, a token revoked
@@ -194,7 +212,28 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/actuator")) {
             return true;
         }
+        if (docsEnabled && isDocsPath(path)) {
+            return true;
+        }
         return "GET".equals(method) && path.startsWith("/api/products");
+    }
+
+    /**
+     * Tells whether the path belongs to the API documentation.
+     *
+     * <p>A prefix match is enough: the UI page, its webjar resources and the documents all live
+     * under one of these roots, and nothing else in the platform is served from them.
+     *
+     * @param path request path
+     * @return true when the request asks for a document or the UI
+     */
+    private static boolean isDocsPath(String path) {
+        for (String prefix : DOCS_PATHS) {
+            if (path.equals(prefix) || path.startsWith(prefix + "/")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
