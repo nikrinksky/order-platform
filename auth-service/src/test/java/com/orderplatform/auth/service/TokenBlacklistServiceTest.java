@@ -1,5 +1,6 @@
 package com.orderplatform.auth.service;
 
+import com.orderplatform.auth.exception.TokenRevocationUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -11,8 +12,6 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,9 +42,30 @@ class TokenBlacklistServiceTest {
         verify(redisTemplate, never()).opsForValue();
     }
 
+    /**
+     * The defect this guards: a failed write was swallowed, so the caller reported a revocation
+     * that never happened and the token stayed usable.
+     */
     @Test
-    void isTokenBlacklisted_shouldReturnTrueWhenExists() {
-        when(redisTemplate.hasKey("blacklist:token-123")).thenReturn(true);
+    void blacklistToken_shouldReportUnavailableBlacklist() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        doThrow(new RuntimeException("Redis down"))
+                .when(valueOperations).set("blacklist:token-123", "true", 3600, TimeUnit.SECONDS);
+
+        assertThrows(TokenRevocationUnavailableException.class,
+                () -> service.blacklistToken("token-123", 3600));
+    }
+
+    /** Reading stays fail-open: an outage must not turn into an authentication outage. */
+    @Test
+    void isTokenBlacklisted_shouldReturnFalseOnException() {
+        when(redisTemplate.hasKey("blacklist:token-123")).thenThrow(new RuntimeException("Redis down"));
+
+        assertFalse(service.isTokenBlacklisted("token-123"));
+    }
+
+    @Test
+    void isTokenBlacklisted_shouldReturnTrueWhenExists() {        when(redisTemplate.hasKey("blacklist:token-123")).thenReturn(true);
 
         assertTrue(service.isTokenBlacklisted("token-123"));
     }
@@ -53,13 +73,6 @@ class TokenBlacklistServiceTest {
     @Test
     void isTokenBlacklisted_shouldReturnFalseWhenNotExists() {
         when(redisTemplate.hasKey("blacklist:token-123")).thenReturn(false);
-
-        assertFalse(service.isTokenBlacklisted("token-123"));
-    }
-
-    @Test
-    void isTokenBlacklisted_shouldReturnFalseOnException() {
-        when(redisTemplate.hasKey("blacklist:token-123")).thenThrow(new RuntimeException("Redis down"));
 
         assertFalse(service.isTokenBlacklisted("token-123"));
     }

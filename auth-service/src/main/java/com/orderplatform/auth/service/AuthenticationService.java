@@ -105,12 +105,18 @@ public class AuthenticationService {
      * refreshes. Reusing a revoked refresh token is answered with an error, which is the signal
      * that the token has to be treated as stolen.
      *
+     * <p>The new pair is generated before the old one is revoked, so a failure while generating
+     * leaves the old pair usable. Revocation itself is fail-closed: if the blacklist cannot be
+     * written the new pair is not returned, because it would replace tokens that are still alive.
+     *
      * <p>The access token is normally expired by the time this is called, so its expiration is
      * read in a way that tolerates that; it is only used to size the blacklist entry.
      *
      * @param accessToken the current access token (to be revoked), may be expired
      * @param refreshToken the refresh token (to be revoked after the new one is issued)
      * @return a map containing new access token, refresh token, and user info
+     * @throws com.orderplatform.auth.exception.TokenRevocationUnavailableException when the old
+     *         tokens could not be revoked
      */
     public Map<String, Object> refreshToken(String accessToken, String refreshToken) {
         if (!jwtService.isRefreshToken(refreshToken)) {
@@ -173,35 +179,52 @@ public class AuthenticationService {
     /**
      * Blacklists a token for the rest of its lifetime.
      *
-     * <p>Revocation is best effort on purpose: the new tokens are already issued at this point, so
-     * a Redis outage must not turn a successful refresh into an error. An expired token needs no
-     * entry - it is rejected by the signature check anyway.
+     * <p>Two failures are told apart on purpose. A token whose expiration cannot be read is not
+     * revoked: it is either malformed or already expired, and in both cases the signature and
+     * expiry checks reject it without any blacklist entry. A blacklist that cannot be written,
+     * however, is fatal for the caller - it is reported and answered with {@code 503}, because
+     * returning success would leave a token usable that the client believes revoked.
      *
      * @param token token to revoke, may be null or already expired
      * @param kind token kind, used for logging only
+     * @throws com.orderplatform.auth.exception.TokenRevocationUnavailableException when the
+     *         entry could not be written
      */
     private void revoke(String token, String kind) {
         if (token == null || token.isEmpty()) {
             return;
         }
+
+        long expiration;
         try {
-            long expiration = jwtService.getExpirationFromTokenAllowingExpired(token);
-            long remainingTtl = (expiration - System.currentTimeMillis())
-                    / AuthConstants.MILLISECONDS_PER_SECOND;
-            if (remainingTtl > 0) {
-                tokenBlacklistService.blacklistToken(token, remainingTtl);
-                log.debug("Old {} token blacklisted", kind);
-            }
+            expiration = jwtService.getExpirationFromTokenAllowingExpired(token);
         } catch (Exception e) {
-            log.warn("Could not revoke old {} token: {}", kind, e.getMessage());
+            log.warn("Could not read the expiration of the old {} token, nothing to revoke: {}",
+                    kind, e.getMessage());
+            return;
         }
+
+        long remainingTtl = (expiration - System.currentTimeMillis())
+                / AuthConstants.MILLISECONDS_PER_SECOND;
+        if (remainingTtl <= 0) {
+            log.debug("Old {} token has expired, no blacklist entry needed", kind);
+            return;
+        }
+
+        tokenBlacklistService.blacklistToken(token, remainingTtl);
+        log.debug("Old {} token blacklisted", kind);
     }
 
     /**
      * Logs out a user by revoking both tokens.
      *
+     * <p>Fail-closed: when the blacklist cannot be written the failure is propagated, so the
+     * caller answers {@code 503} instead of reporting a logout that did not happen.
+     *
      * @param accessToken the access token to revoke
      * @param refreshToken the refresh token to revoke
+     * @throws com.orderplatform.auth.exception.TokenRevocationUnavailableException when a token
+     *         could not be revoked
      */
     public void logout(String accessToken, String refreshToken) {
         String userEmail = null;
