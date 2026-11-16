@@ -73,6 +73,13 @@ server:
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
 
+gateway:
+  # Addresses of the proxies whose X-Forwarded-For is believed, comma-separated. Empty means none:
+  # the gateway port is published directly, so a header from an arbitrary peer is just a value the
+  # client chose, and trusting it would let one client hand itself a fresh rate-limit bucket on
+  # every request. Fill this in when the gateway runs behind a known proxy or load balancer.
+  trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}
+
 management:
   endpoints:
     web:

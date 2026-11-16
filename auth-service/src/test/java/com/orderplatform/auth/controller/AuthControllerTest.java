@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.HashMap;
@@ -42,25 +42,25 @@ class AuthControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private UserService userService;
 
-    @MockBean
+    @MockitoBean
     private AuthenticationService authenticationService;
 
-    @MockBean
+    @MockitoBean
     private com.orderplatform.auth.repository.UserRepository userRepository;
 
-    @MockBean
+    @MockitoBean
     private com.orderplatform.auth.service.UserMapper userMapper;
 
-    @MockBean
+    @MockitoBean
     private com.orderplatform.auth.security.JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
     private com.orderplatform.auth.security.JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    @MockBean
+    @MockitoBean
     private com.orderplatform.auth.service.CustomUserDetailsService customUserDetailsService;
 
     private RegisterRequest validRegisterRequest() {
