@@ -4,7 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
+
+import java.net.InetSocketAddress;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,6 +20,16 @@ class RateLimiterConfigTest {
         KeyResolver resolver = config.userKeyResolver();
         Mono<String> key = resolver.resolve(exchange);
         return key.block();
+    }
+
+    /** A request that really arrived from the given peer address. */
+    private static MockServerHttpRequest.BaseBuilder<?> requestFrom(String path, String peer) {
+        return MockServerHttpRequest.get(path)
+                .remoteAddress(new InetSocketAddress(peer, 51234));
+    }
+
+    private void trust(String proxies) {
+        ReflectionTestUtils.setField(config, "trustedProxies", proxies);
     }
 
     /**
@@ -49,32 +62,85 @@ class RateLimiterConfigTest {
     @Test
     void shouldCountAnonymousCallersPerAddress() {
         assertEquals("ip:203.0.113.7",
-                keyFor(MockServerHttpRequest.get("/api/products")
-                        .header("X-Forwarded-For", "203.0.113.7")));
+                keyFor(requestFrom("/api/products", "203.0.113.7")));
     }
 
     @Test
     void shouldGiveDifferentAnonymousCallersDifferentBuckets() {
-        String first = keyFor(MockServerHttpRequest.get("/api/products")
-                .header("X-Forwarded-For", "203.0.113.7"));
-        String second = keyFor(MockServerHttpRequest.get("/api/products")
-                .header("X-Forwarded-For", "198.51.100.9"));
+        String first = keyFor(requestFrom("/api/products", "203.0.113.7"));
+        String second = keyFor(requestFrom("/api/products", "198.51.100.9"));
 
         assertNotEquals(first, second);
     }
 
-    /** A proxy chain lists the original client first; the rest are intermediaries. */
+    /**
+     * The defect this guards: the gateway port is published directly, so the header was whatever
+     * the caller wrote - one client handed itself a fresh bucket on every request.
+     */
     @Test
-    void shouldTakeTheFirstAddressOfAForwardedForChain() {
+    void shouldIgnoreForwardedForFromAnUntrustedPeer() {
         assertEquals("ip:203.0.113.7",
-                keyFor(MockServerHttpRequest.get("/api/products")
-                        .header("X-Forwarded-For", "203.0.113.7, 10.0.0.1, 10.0.0.2")));
+                keyFor(requestFrom("/api/products", "203.0.113.7")
+                        .header("X-Forwarded-For", "198.51.100.9")));
+    }
+
+    @Test
+    void shouldIgnoreForwardedForWhenNoProxyIsTrusted() {
+        trust("");
+
+        assertEquals("ip:10.0.0.1",
+                keyFor(requestFrom("/api/products", "10.0.0.1")
+                        .header("X-Forwarded-For", "203.0.113.7")));
+    }
+
+    /** Behind a configured proxy the header is the only way to see the original client. */
+    @Test
+    void shouldTakeTheClientAddressFromATrustedProxy() {
+        trust("10.0.0.1");
+
+        assertEquals("ip:203.0.113.7",
+                keyFor(requestFrom("/api/products", "10.0.0.1")
+                        .header("X-Forwarded-For", "203.0.113.7")));
+    }
+
+    /**
+     * A chain is walked from the right: the leftmost entry is what the client claimed, the
+     * rightmost untrusted address is the one the nearest proxy actually saw.
+     */
+    @Test
+    void shouldSkipTrustedHopsAndTakeTheNearestUntrustedAddress() {
+        trust("10.0.0.1, 10.0.0.2");
+
+        assertEquals("ip:203.0.113.7",
+                keyFor(requestFrom("/api/products", "10.0.0.1")
+                        .header("X-Forwarded-For", "203.0.113.7, 10.0.0.2")));
+    }
+
+    /** A client that prepends its own value cannot hide behind the real address the proxy appended. */
+    @Test
+    void shouldNotLetATrustedProxyClientSpoofItsOwnEntry() {
+        trust("10.0.0.1");
+
+        assertEquals("ip:198.51.100.9",
+                keyFor(requestFrom("/api/products", "10.0.0.1")
+                        .header("X-Forwarded-For", "1.2.3.4, 198.51.100.9")));
+    }
+
+    /** Every hop trusted means there is no client address to report; the peer is used. */
+    @Test
+    void shouldFallBackToThePeerWhenEveryHopIsTrusted() {
+        trust("10.0.0.1, 10.0.0.2");
+
+        assertEquals("ip:10.0.0.1",
+                keyFor(requestFrom("/api/products", "10.0.0.1")
+                        .header("X-Forwarded-For", "10.0.0.2")));
     }
 
     @Test
     void shouldFallBackToUnknownWithoutAnyAddressInformation() {
         assertEquals("ip:unknown",
-                keyFor(MockServerHttpRequest.get("/api/products")));
+                keyFor(MockServerHttpRequest.get("/api/products")
+                        .remoteAddress(null)));
     }
 
     /**
@@ -85,6 +151,7 @@ class RateLimiterConfigTest {
     void shouldIgnoreBlankUserIdHeader() {
         assertEquals("ip:unknown",
                 keyFor(MockServerHttpRequest.get("/api/products")
+                        .remoteAddress(null)
                         .header(RateLimiterConfig.USER_ID_HEADER, "   ")));
     }
 }

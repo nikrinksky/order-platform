@@ -162,6 +162,10 @@ Testcontainers на Linux работают без проблем через Unix
   (локальный запуск без почтового сервера), в `docker-compose` включено и письма уходят в MailHog
 - `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` - SMTP-сервер для notification-service
   (`mailhog:1025` в Docker)
+- `GATEWAY_TRUSTED_PROXIES` - адреса прокси через запятую, которым api-gateway верит заголовок
+  `X-Forwarded-For`. По умолчанию пусто: порт шлюза опубликован напрямую, и заголовок от
+  произвольного клиента игнорируется (иначе один клиент выдавал бы себе новый bucket rate-limiter'а
+  на каждый запрос)
 
 ## Порталы и инструменты
 
