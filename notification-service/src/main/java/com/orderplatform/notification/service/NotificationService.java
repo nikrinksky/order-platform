@@ -26,6 +26,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserContactRepository userContactRepository;
     private final EmailSender emailSender;
+    private final NotificationRateLimiter rateLimiter;
 
     /** Delivery attempts before a notification is left unsent for inspection. */
     @Value("${notification.retry.max-attempts:5}")
@@ -107,12 +108,19 @@ public class NotificationService {
      * <p>When no address is known the attempt is recorded as failed too, so the notification is
      * picked up again once the contact projection catches up instead of staying unsent forever.
      *
+     * <p>A user over their rate limit gets no attempt at all: the record is only rescheduled, see
+     * {@link #defer(Notification)}.
+     *
      * @param notification the stored notification to deliver
      */
     public void deliver(Notification notification) {
         String email = addressOf(notification.getUserId());
         if (email == null) {
             recordFailure(notification, "no email known for user " + notification.getUserId());
+            return;
+        }
+        if (!rateLimiter.tryAcquire(notification.getUserId())) {
+            defer(notification);
             return;
         }
 
@@ -160,6 +168,22 @@ public class NotificationService {
         notificationRepository.save(notification);
         log.warn("Notification {} delivery failed (attempt {}/{}), retrying in {} ms: {}",
                 notification.getId(), attempts, maxAttempts, delay, error);
+    }
+
+    /**
+     * Holds a notification back until the user's bucket has a token again.
+     *
+     * <p>A rate limit is not a delivery failure: the attempt counter and the last error are left
+     * alone, so a burst of events neither burns the bounded attempts nor shows up in the history
+     * as a failed delivery. The retry job picks the record up once the delay has passed, which is
+     * why nothing is lost - the message is only moved in time.
+     */
+    private void defer(Notification notification) {
+        long delay = rateLimiter.retryDelayMs();
+        notification.setNextAttemptAt(LocalDateTime.now().plusNanos(delay * 1_000_000));
+        notificationRepository.save(notification);
+        log.info("Notification {} for user {} is held back by the rate limit, next attempt in {} ms",
+                notification.getId(), notification.getUserId(), delay);
     }
 
     private String addressOf(String userId) {

@@ -37,6 +37,9 @@ class NotificationServiceTest {
     @Mock
     private EmailSender emailSender;
 
+    @Mock
+    private NotificationRateLimiter rateLimiter;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -45,6 +48,8 @@ class NotificationServiceTest {
         // Field-injected policy values; the retry behaviour below is what depends on them
         ReflectionTestUtils.setField(notificationService, "maxAttempts", 3);
         ReflectionTestUtils.setField(notificationService, "backoffMs", 1000L);
+        // The limit has its own tests; here the bucket always has room unless a test says otherwise
+        lenient().when(rateLimiter.tryAcquire(anyString())).thenReturn(true);
     }
 
     @Test
@@ -410,9 +415,43 @@ class NotificationServiceTest {
                 "the second attempt waits longer than the base delay");
     }
 
+    /**
+     * Over the limit the message is only moved in time: the record stays unsent, the attempt
+     * counter is untouched - otherwise a burst would spend the bounded attempts and the message
+     * would be dropped - and the retry job picks it up when a token is back.
+     */
     @Test
-    void onOrderStatusChanged_shouldSendEmailAndMarkNotificationAsSent() {
-        OrderStatusChangedEvent event = OrderStatusChangedEvent.newBuilder()
+    void deliver_shouldDeferWhenTheUserIsRateLimited() {
+        Notification notification = Notification.builder()
+                .id("notif-1")
+                .userId("user-1")
+                .subject("Order Created")
+                .body("body")
+                .nextAttemptAt(LocalDateTime.now())
+                .build();
+        when(userContactRepository.findById("user-1"))
+                .thenReturn(Optional.of(UserContact.builder()
+                        .userId("user-1")
+                        .email("buyer@example.com")
+                        .build()));
+        when(rateLimiter.tryAcquire("user-1")).thenReturn(false);
+        when(rateLimiter.retryDelayMs()).thenReturn(1000L);
+
+        LocalDateTime before = LocalDateTime.now();
+        notificationService.deliver(notification);
+
+        verify(emailSender, never()).send(anyString(), anyString(), anyString());
+        assertFalse(notification.isSent());
+        assertEquals(0, notification.getAttempts(), "a held-back message is not a failed attempt");
+        assertNull(notification.getLastError(), "the limit is not an error of the delivery");
+        assertNotNull(notification.getNextAttemptAt(), "the message has to be scheduled again");
+        assertTrue(notification.getNextAttemptAt().isAfter(before.plusNanos(500_000_000L)),
+                "the next attempt waits for a token");
+        verify(notificationRepository).save(notification);
+    }
+
+    @Test
+    void onOrderStatusChanged_shouldSendEmailAndMarkNotificationAsSent() {        OrderStatusChangedEvent event = OrderStatusChangedEvent.newBuilder()
                 .setOrderId("order-1")
                 .setUserId("user-1")
                 .setOrderNumber("ORD-ABC12345")
