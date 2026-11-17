@@ -55,6 +55,13 @@ notification:
     interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:60000}
     max-attempts: ${NOTIFICATION_RETRY_MAX_ATTEMPTS:5}
     backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:60000}
+  # Per-user limit on outgoing notifications, a token bucket in Redis. A user gets `capacity`
+  # messages back to back and then one more every `refill-ms`; a message over the limit is not
+  # dropped, it is rescheduled by the retry job. The limiter fails open when Redis is unreachable.
+  rate-limit:
+    enabled: ${NOTIFICATION_RATE_LIMIT_ENABLED:true}
+    capacity: ${NOTIFICATION_RATE_LIMIT_CAPACITY:10}
+    refill-ms: ${NOTIFICATION_RATE_LIMIT_REFILL_MS:60000}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
