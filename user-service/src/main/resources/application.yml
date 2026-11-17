@@ -60,6 +60,21 @@ jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
   expiration: 3600000
 
+# API documentation. Served at /v3/api-docs and /swagger-ui.html; set SWAGGER_ENABLED=false where
+# the documents must not be reachable. The gateway aggregates all of them into one Swagger UI.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+    disable-swagger-default-url: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+    display-request-duration: true
+
 ---
 # Профиль для разработки (локальный запуск в IDEA)
 spring:

@@ -140,6 +140,55 @@ class JwtAuthGlobalFilterTest {
                 runFilter(HttpMethod.GET, "/api/products/1"));
     }
 
+    /**
+     * The Swagger UI is a browser page: it has no token to present, and the documents it loads
+     * carry no data of their own, only the shape of the API.
+     */
+    @Test
+    void shouldAllowSwaggerUiWithoutToken() {
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/swagger-ui.html"));
+    }
+
+    @Test
+    void shouldAllowSwaggerUiResourcesWithoutToken() {
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/swagger-ui/swagger-ui-bundle.js"));
+    }
+
+    @Test
+    void shouldAllowAggregatedDocumentWithoutToken() {
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/api-docs/order"));
+    }
+
+    @Test
+    void shouldAllowServiceDocumentWithoutToken() {
+        assertEquals(HttpStatus.OK,
+                runFilter(HttpMethod.GET, "/v3/api-docs"));
+    }
+
+    /**
+     * Turning the documentation off has to close it here too, otherwise the request would travel
+     * downstream and come back as a 404 instead of an honest rejection.
+     */
+    @Test
+    void shouldRejectDocumentationWhenDisabled() {
+        ReflectionTestUtils.setField(filter, "docsEnabled", false);
+
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                runFilter(HttpMethod.GET, "/swagger-ui.html"));
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                runFilter(HttpMethod.GET, "/api-docs/order"));
+    }
+
+    /** A path that merely starts with a docs prefix is not a document. */
+    @Test
+    void shouldNotTreatLookalikePathAsDocumentation() {
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                runFilter(HttpMethod.GET, "/api-documents"));
+    }
+
     @Test
     void shouldRejectPublicProductPost() {
         assertEquals(HttpStatus.UNAUTHORIZED,

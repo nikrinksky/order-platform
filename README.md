@@ -174,12 +174,33 @@ Testcontainers на Linux работают без проблем через Unix
 | Инструмент | URL | Логин | Пароль |
 |------------|-----|-------|--------|
 | API Gateway | http://localhost:8080 | - | - |
+| **Swagger UI (все сервисы)** | http://localhost:8080/swagger-ui.html | - | - |
 | Auth Service | http://localhost:8090 | - | - |
 | User Service | http://localhost:8082 | - | - |
 | pgAdmin | http://localhost:5050 | admin@orderplatform.com | admin |
 | mongo-express | http://localhost:8087 | admin | admin |
 | redis-commander | http://localhost:8088 | - | - |
 | MailHog (письма notification-service) | http://localhost:8025 | - | - |
+
+### Swagger UI и OpenAPI
+
+Документация есть у каждого сервиса. Единая точка входа — Swagger UI на шлюзе: он перечисляет
+документы всех шести сервисов, а переключаться между ними можно в выпадающем списке сверху.
+
+| Сервис | Документ через шлюз | Документ напрямую |
+|--------|---------------------|-------------------|
+| auth-service | `/api-docs/auth` | `http://localhost:8090/api-docs` |
+| user-service | `/api-docs/user` | `http://localhost:8082/v3/api-docs` |
+| product-service | `/api-docs/product` | `http://localhost:8089/v3/api-docs` |
+| inventory-service | `/api-docs/inventory` | `http://localhost:8083/v3/api-docs` |
+| order-service | `/api-docs/order` | `http://localhost:8084/v3/api-docs` |
+| notification-service | `/api-docs/notification` | `http://localhost:8085/v3/api-docs` |
+
+Схема `Bearer Authentication` объявлена во всех документах, поэтому в UI есть кнопка
+**Authorize**: вставьте access-токен один раз, и он уйдёт со всеми запросами.
+
+Выключить документацию в окружении, где публиковать её не нужно: `SWAGGER_ENABLED=false`.
+Шлюз закрывает эти пути вместе с сервисами, и запрос получает `401`, а не `404` из глубины.
 
 ## Базы данных
 

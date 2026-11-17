@@ -112,7 +112,9 @@ management:
 springdoc:
   api-docs:
     path: /api-docs
-    enabled: true
+    # The auth service serves its document for the aggregated Swagger UI on the gateway; the
+    # service's own UI stays off. SWAGGER_ENABLED=false turns the document off everywhere.
+    enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     path: /swagger-ui.html
     enabled: false
