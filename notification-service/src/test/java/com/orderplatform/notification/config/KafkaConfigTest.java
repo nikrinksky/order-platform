@@ -46,4 +46,28 @@ class KafkaConfigTest {
         assertNotNull(factory);
         assertNotNull(factory.getConsumerFactory());
     }
+
+    /**
+     * A consumed event has to continue the trace of the service that produced it, which only
+     * happens when the listener container observes the record.
+     */
+    @Test
+    void shouldEnableObservationOnTheListenerContainer() {
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+                kafkaConfig.kafkaListenerContainerFactory();
+
+        assertTrue(factory.getContainerProperties().isObservationEnabled());
+    }
+
+    @Test
+    void shouldUseTheProvidedObservationRegistryOnTheListenerContainer() {
+        io.micrometer.observation.ObservationRegistry registry =
+                io.micrometer.observation.ObservationRegistry.create();
+        ReflectionTestUtils.setField(kafkaConfig, "observationRegistry", registry);
+
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+                kafkaConfig.kafkaListenerContainerFactory();
+
+        assertSame(registry, factory.getContainerProperties().getObservationRegistry());
+    }
 }

@@ -31,6 +31,12 @@ spring:
     bootstrap-servers: localhost:19092
     properties:
       schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    # Both sides are auto-configured here: with observation on, a consumed event continues the
+    # trace of its producer instead of starting a new one
+    template:
+      observation-enabled: true
+    listener:
+      observation-enabled: true
     consumer:
       group-id: user-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -81,6 +87,14 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  # Traces are shipped over OTLP. A local run exports to a Jaeger started by hand; compose points
+  # OTEL_EXPORTER_OTLP_ENDPOINT at the jaeger container.
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 ---
 # Профиль для разработки (локальный запуск в IDEA)

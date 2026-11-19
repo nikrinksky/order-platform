@@ -45,4 +45,30 @@ class KafkaConfigTest {
         assertNotNull(template);
         assertNotNull(template.getProducerFactory());
     }
+
+    /**
+     * A publish has to become a span, otherwise the trace stops at the outbox.
+     * KafkaTemplate exposes no public getter for the flag, so the field is read directly.
+     */
+    @Test
+    void shouldEnableObservationOnTheTemplate() {
+        KafkaTemplate<String, Object> template = kafkaConfig.kafkaTemplate();
+
+        assertEquals(Boolean.TRUE, ReflectionTestUtils.getField(template, "observationEnabled"));
+    }
+
+    /**
+     * The flag alone is not enough: without the registry the span is created in a no-op one and
+     * never leaves the service. The getter of the template is protected, hence the field access.
+     */
+    @Test
+    void shouldUseTheProvidedObservationRegistry() {
+        io.micrometer.observation.ObservationRegistry registry =
+                io.micrometer.observation.ObservationRegistry.create();
+        ReflectionTestUtils.setField(kafkaConfig, "observationRegistry", registry);
+
+        KafkaTemplate<String, Object> template = kafkaConfig.kafkaTemplate();
+
+        assertSame(registry, ReflectionTestUtils.getField(template, "observationRegistry"));
+    }
 }

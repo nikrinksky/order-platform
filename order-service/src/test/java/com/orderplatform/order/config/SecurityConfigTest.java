@@ -59,6 +59,22 @@ class SecurityConfigTest {
     }
 
     /**
+     * The registry is what turns the inventory call into a span of the caller's trace; without it
+     * the checkout and the reservation it triggers would be two unrelated traces.
+     */
+    @Test
+    void shouldTraceTheOutboundCallWithTheProvidedRegistry() {
+        SecurityConfig config = new SecurityConfig();
+        io.micrometer.observation.ObservationRegistry registry =
+                io.micrometer.observation.ObservationRegistry.create();
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "observationRegistry", registry);
+
+        RestTemplate restTemplate = config.restTemplate();
+
+        assertSame(registry, restTemplate.getObservationRegistry());
+    }
+
+    /**
      * inventory-service requires an administrator or a manager role for its reserve/release
      * endpoints, so the operator's token has to travel with the outbound call.
      */
