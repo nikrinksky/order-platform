@@ -1,0 +1,4 @@
+# Shell scripts are executed inside the Linux build image, where a CRLF line ending turns
+# "#!/bin/sh" into "#!/bin/sh\r" and the interpreter cannot be found. Keep them LF even on a
+# Windows checkout with core.autocrlf=true.
+*.sh text eol=lf

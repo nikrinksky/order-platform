@@ -42,6 +42,9 @@ cp .env.example .env
 
 # 2. Сборка и запуск. Образы собираются из исходников (multi-stage Dockerfile), поэтому
 #    предварительный "mvn package" не нужен: "docker compose build" работает на чистом клоне.
+#    Сборка внутри образа повторяется до трёх раз (.mvn/docker-build.sh): зеркало Maven иногда
+#    обрывает загрузку крупного jar, и без повтора падал весь образ.
+#    Число попыток меняется переменной MAVEN_BUILD_ATTEMPTS.
 docker compose up -d --build
 
 # 3. Инициализация схем баз данных (для auth-service и user-service)
