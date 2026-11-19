@@ -20,3 +20,11 @@ datasources:
     url: http://loki:3100
     jsonData:
       maxLines: 1000
+
+  # Traces. Grafana reads them through the Jaeger datasource, so a trace id from a log line can be
+  # opened next to the metrics and logs of the same request.
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686

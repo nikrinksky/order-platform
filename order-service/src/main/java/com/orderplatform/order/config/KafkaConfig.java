@@ -1,7 +1,9 @@
 package com.orderplatform.order.config;
 
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +31,13 @@ public class KafkaConfig {
     @Value("${spring.kafka.properties.schema.registry.url}")
     private String schemaRegistryUrl;
 
+    /**
+     * The real registry when Spring provides one; the no-op default keeps the class usable from a
+     * plain unit test that instantiates it directly.
+     */
+    @Autowired(required = false)
+    private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
@@ -45,6 +54,11 @@ public class KafkaConfig {
 
     @Bean
     public KafkaTemplate<String, Object> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+        KafkaTemplate<String, Object> template = new KafkaTemplate<>(producerFactory());
+        // A publish becomes a span, and the trace context travels in the record headers, so a
+        // consumer continues the same trace instead of starting an unrelated one.
+        template.setObservationRegistry(observationRegistry);
+        template.setObservationEnabled(true);
+        return template;
     }
 }

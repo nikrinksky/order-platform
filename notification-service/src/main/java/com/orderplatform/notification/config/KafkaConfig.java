@@ -1,11 +1,13 @@
 package com.orderplatform.notification.config;
 
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -56,6 +58,13 @@ public class KafkaConfig {
     @Value("${spring.kafka.consumer.properties.retry.max-attempts:3}")
     private long retryMaxAttempts;
 
+    /**
+     * The real registry when Spring provides one; the no-op default keeps the class usable from a
+     * plain unit test that instantiates it directly.
+     */
+    @Autowired(required = false)
+    private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
@@ -79,6 +88,10 @@ public class KafkaConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        // A consumed event continues the trace of the service that produced it: the context
+        // arrives in the record headers, so "order created" and the mail sent for it share a trace.
+        factory.getContainerProperties().setObservationRegistry(observationRegistry);
+        factory.getContainerProperties().setObservationEnabled(true);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 new DeadLetterPublishingRecoverer(deadLetterTemplate()),
                 new FixedBackOff(retryBackoffMs, retryMaxAttempts));

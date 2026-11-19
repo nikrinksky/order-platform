@@ -13,7 +13,7 @@ order-platform/
 ├── inventory-service/   # Сервис инвентаря
 ├── order-service/       # Сервис заказов
 ├── notification-service/# Сервис уведомлений
-├── monitoring/          # Prometheus, Grafana, Loki, Vector (метрики и логи)
+├── monitoring/          # Prometheus, Grafana, Loki, Vector, Jaeger (метрики, логи, трейсы)
 ├── docker-compose.yaml  # Конфигурация Docker Compose
 ├── pom.xml              # Root POM файл
 └── mvnw                 # Maven Wrapper
@@ -175,6 +175,10 @@ Testcontainers на Linux работают без проблем через Unix
   `CAPACITY` писем, дальше по одному каждые `REFILL_MS` миллисекунд
 - `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` - логин и пароль Grafana в локальном стеке
   (по умолчанию `admin` / `admin`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - куда сервисы отправляют трейсы по OTLP/HTTP. По умолчанию
+  `http://localhost:4318/v1/traces` (локальный запуск), в `docker-compose` — `http://jaeger:4318/v1/traces`
+- `OTEL_TRACING_SAMPLING_PROBABILITY` - доля запросов, попадающих в трейсы (0.0–1.0).
+  По умолчанию `1.0`: в dev пишутся все трейсы, в проде значение уменьшают
 
 ## Порталы и инструменты
 
@@ -194,6 +198,7 @@ mongo-express и redis-commander):
 | Grafana (метрики и логи) | http://localhost:3000 | admin | admin |
 | Prometheus (запросы и алерты) | http://localhost:9090 | - | - |
 | Loki (API хранилища логов) | http://localhost:3100 | - | - |
+| Jaeger (трейсы) | http://localhost:16686 | - | - |
 
 ### Swagger UI и OpenAPI
 
@@ -217,9 +222,9 @@ mongo-express и redis-commander):
 
 ## Мониторинг и логи
 
-Стек поднимается вместе с остальным через `docker compose up -d`: Prometheus, Grafana, Loki и
-Vector. Отдельный профиль не нужен, потому что без метрик и логов отладка распределённой системы
-превращается в чтение `docker compose logs`.
+Стек поднимается вместе с остальным через `docker compose up -d`: Prometheus, Grafana, Loki,
+Vector и Jaeger. Отдельный профиль не нужен, потому что без метрик, логов и трейсов отладка
+распределённой системы превращается в чтение `docker compose logs`.
 
 ### Метрики
 
@@ -251,10 +256,10 @@ Vector. Отдельный профиль не нужен, потому что �
 
 ### Grafana
 
-Дашборд `Order Platform` и datasources (Prometheus + Loki) провижионятся из `monitoring/grafana`,
-поэтому они версионируются вместе с кодом, а не живут в контейнере. На дашборде: состояние
-сервисов, запросы в секунду, доля 5xx, p95 задержки, занятость heap и панель логов. Переменная
-`Сервис` сверху фильтрует все панели сразу.
+Дашборд `Order Platform` и datasources (Prometheus + Loki + Jaeger) провижионятся из
+`monitoring/grafana`, поэтому они версионируются вместе с кодом, а не живут в контейнере.
+На дашборде: состояние сервисов, запросы в секунду, доля 5xx, p95 задержки, занятость heap,
+панель логов и ссылки на трейсы. Переменная `Сервис` сверху фильтрует все панели сразу.
 
 ### Логи
 
@@ -274,6 +279,45 @@ macOS и Linux.
 {service=~".+-service"} |= "ERROR"             # ошибки всех сервисов
 {service="notification-service"} |= "held back"  # срабатывания лимита уведомлений
 ```
+
+### Трассировка
+
+Каждый сервис подключён к Micrometer Tracing с мостом OpenTelemetry и отправляет спаны по
+OTLP/HTTP в Jaeger (`jaegertracing/all-in-one`, UI — http://localhost:16686).
+
+Что попадает в трейс:
+
+- **входящие HTTP-запросы** — спан на каждый запрос; заголовок `traceparent` от вызывающего
+  продолжает его трейс, поэтому запрос через шлюз и работа сервиса лежат в одном трейсе;
+- **исходящий вызов order-service → inventory-service** — RestTemplate получает
+  `ObservationRegistry`, контекст уходит в заголовке, и резервирование остатка видно в том же
+  трейсе, что и создание заказа;
+- **публикация в Kafka** — `spring.kafka.template.observation-enabled: true` (auth-service,
+  user-service) и явные `setObservationRegistry` / `setObservationEnabled` в `KafkaConfig`
+  order-, inventory- и product-service;
+- **чтение из Kafka** — listener-контейнеры order-service и notification-service создают спаны и
+  продолжают трейс из заголовков сообщения, у user-service это включает
+  `spring.kafka.listener.observation-enabled`.
+
+Настройки лежат в `application.yml` каждого сервиса:
+
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+```
+
+Как посмотреть трейс: отправьте запрос через шлюз (`POST /api/orders` и подобное), откройте
+Jaeger UI, выберите сервис и нажмите **Find Traces**. В трейсе будут спаны шлюза, order-service,
+inventory-service и публикаций в Kafka.
+
+Jaeger не является зависимостью старта: если коллектор недоступен, сервис продолжает работать,
+а экспортёр пишет предупреждения в лог. Ссылки на трейсы есть на дашборде Grafana, а в Explore
+они открываются через datasource `Jaeger`.
 
 ## Базы данных
 

@@ -2,6 +2,9 @@ server:
   port: 8084
 
 spring:
+  # Also the service name in traces and metrics: without it spans land under "unknown_service".
+  application:
+    name: order-service
   datasource:
     url: jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5435}/orderdb
     username: ${SPRING_DATASOURCE_USERNAME:orderuser}
@@ -94,6 +97,14 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  # Traces are shipped over OTLP. A local run exports to a Jaeger started by hand; compose points
+  # OTEL_EXPORTER_OTLP_ENDPOINT at the jaeger container.
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 ---
 spring:

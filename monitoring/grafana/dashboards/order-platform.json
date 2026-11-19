@@ -375,6 +375,21 @@
       ],
       "title": "Логи контейнеров",
       "type": "logs"
+    },
+    {
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 8,
+      "options": {
+        "content": "### Трейсы\n\nJaeger собирает сквозные трейсы: запрос через шлюз виден вместе с вызовами сервисов и Kafka.\n\n[Открыть Jaeger UI](http://localhost:16686) — выберите сервис и операцию, затем откройте трейс.\n\n[order-service](http://localhost:16686/search?service=order-service) · [inventory-service](http://localhost:16686/search?service=inventory-service) · [notification-service](http://localhost:16686/search?service=notification-service) · [api-gateway](http://localhost:16686/search?service=api-gateway)\n\nВ Grafana Explore трейсы доступны через datasource `Jaeger`.",
+        "mode": "markdown"
+      },
+      "title": "Трейсы (Jaeger)",
+      "type": "text"
     }
   ],
   "refresh": "30s",

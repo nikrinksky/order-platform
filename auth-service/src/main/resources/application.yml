@@ -36,6 +36,10 @@ spring:
     bootstrap-servers:  ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
     properties:
       schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    # The outbox publishes through the auto-configured template: with observation on, the publish
+    # is a span and the trace context rides along in the record headers
+    template:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
@@ -102,6 +106,14 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  # Traces are shipped over OTLP. A local run exports to a Jaeger started by hand; compose points
+  # OTEL_EXPORTER_OTLP_ENDPOINT at the jaeger container.
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoint:
     health:
       show-details: when-authorized

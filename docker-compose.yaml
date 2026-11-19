@@ -204,6 +204,7 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: auth
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
@@ -245,6 +246,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     networks:
       - order-network
     depends_on:
@@ -271,6 +273,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     depends_on:
       user-db:
         condition: service_healthy
@@ -302,6 +305,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -330,6 +334,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     depends_on:
       inventorydb:
         condition: service_healthy
@@ -360,6 +365,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: dev123
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     depends_on:
       orderdb:
         condition: service_healthy
@@ -396,6 +402,7 @@ services:
       # Compose ships a mail server, so delivery is on here; the service defaults to off
       NOTIFICATION_EMAIL_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -420,6 +427,19 @@ services:
     restart: unless-stopped
 
   # ============= OBSERVABILITY =============
+  # Traces: services export OTLP/HTTP spans here, the UI is at http://localhost:16686.
+  # Tracing is not a startup dependency, so no service waits for Jaeger to be healthy.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - order-network
+    restart: unless-stopped
+
   # Metrics: every service exposes /actuator/prometheus, Prometheus scrapes them and evaluates the
   # alert rules from monitoring/prometheus/alert-rules.yml.
   prometheus:

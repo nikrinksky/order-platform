@@ -1,6 +1,8 @@
 package com.orderplatform.order.config;
 
 import com.orderplatform.common.security.JwtAuthenticationFilter;
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +29,13 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    /**
+     * The real registry when Spring provides one; the no-op default keeps the class usable from a
+     * plain unit test that instantiates it directly.
+     */
+    @Autowired(required = false)
+    private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
 
     /**
      * Paths the API documentation is served from: the OpenAPI document, the Swagger UI page and
@@ -77,11 +86,15 @@ public class SecurityConfig {
      * operator who triggered the reservation has to travel with the call. A call made outside a
      * request (no header to relay) is left unauthenticated and is refused downstream, which keeps
      * the saga fail-closed instead of silently reserving stock without an identity.
+     *
+     * <p>The registry makes each call a span of its own and puts the trace context into the
+     * outgoing headers, so a checkout and the reservation it triggers are one trace.
      */
     @Bean
     public RestTemplate restTemplate() {
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.setInterceptors(List.of(this::relayAuthorizationHeader));
+        restTemplate.setObservationRegistry(observationRegistry);
         return restTemplate;
     }
 
