@@ -5,8 +5,10 @@
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY . .
+# The script repeats the build, so a truncated download from the Maven mirror does not fail the
+# image; see its header for the details.
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -s /workspace/.mvn/docker-settings.xml -pl product-service -am -DskipTests package
+    sh /workspace/.mvn/docker-build.sh product-service
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM amazoncorretto:17-alpine

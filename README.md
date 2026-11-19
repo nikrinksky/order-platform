@@ -13,6 +13,7 @@ order-platform/
 ├── inventory-service/   # Сервис инвентаря
 ├── order-service/       # Сервис заказов
 ├── notification-service/# Сервис уведомлений
+├── monitoring/          # Prometheus, Grafana, Loki, Vector (метрики и логи)
 ├── docker-compose.yaml  # Конфигурация Docker Compose
 ├── pom.xml              # Root POM файл
 └── mvnw                 # Maven Wrapper
@@ -41,6 +42,9 @@ cp .env.example .env
 
 # 2. Сборка и запуск. Образы собираются из исходников (multi-stage Dockerfile), поэтому
 #    предварительный "mvn package" не нужен: "docker compose build" работает на чистом клоне.
+#    Сборка внутри образа повторяется до трёх раз (.mvn/docker-build.sh): зеркало Maven иногда
+#    обрывает загрузку крупного jar, и без повтора падал весь образ.
+#    Число попыток меняется переменной MAVEN_BUILD_ATTEMPTS.
 docker compose up -d --build
 
 # 3. Инициализация схем баз данных (для auth-service и user-service)
@@ -169,10 +173,13 @@ Testcontainers на Linux работают без проблем через Unix
 - `NOTIFICATION_RATE_LIMIT_ENABLED` / `NOTIFICATION_RATE_LIMIT_CAPACITY` /
   `NOTIFICATION_RATE_LIMIT_REFILL_MS` - лимит уведомлений на пользователя: подряд проходит
   `CAPACITY` писем, дальше по одному каждые `REFILL_MS` миллисекунд
+- `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` - логин и пароль Grafana в локальном стеке
+  (по умолчанию `admin` / `admin`)
 
 ## Порталы и инструменты
 
-После запуска через `docker-compose --profile dev up -d`:
+После запуска через `docker compose up -d` (профиль `dev` дополнительно поднимает pgAdmin,
+mongo-express и redis-commander):
 
 | Инструмент | URL | Логин | Пароль |
 |------------|-----|-------|--------|
@@ -184,6 +191,9 @@ Testcontainers на Linux работают без проблем через Unix
 | mongo-express | http://localhost:8087 | admin | admin |
 | redis-commander | http://localhost:8088 | - | - |
 | MailHog (письма notification-service) | http://localhost:8025 | - | - |
+| Grafana (метрики и логи) | http://localhost:3000 | admin | admin |
+| Prometheus (запросы и алерты) | http://localhost:9090 | - | - |
+| Loki (API хранилища логов) | http://localhost:3100 | - | - |
 
 ### Swagger UI и OpenAPI
 
@@ -204,6 +214,66 @@ Testcontainers на Linux работают без проблем через Unix
 
 Выключить документацию в окружении, где публиковать её не нужно: `SWAGGER_ENABLED=false`.
 Шлюз закрывает эти пути вместе с сервисами, и запрос получает `401`, а не `404` из глубины.
+
+## Мониторинг и логи
+
+Стек поднимается вместе с остальным через `docker compose up -d`: Prometheus, Grafana, Loki и
+Vector. Отдельный профиль не нужен, потому что без метрик и логов отладка распределённой системы
+превращается в чтение `docker compose logs`.
+
+### Метрики
+
+Каждый сервис (включая шлюз) собирается с `micrometer-registry-prometheus` и отдаёт метрики по
+`/actuator/prometheus`. Prometheus опрашивает их каждые 15 секунд, конфигурация —
+`monitoring/prometheus/prometheus.yml`.
+
+Что видно в метриках:
+
+- `http_server_requests_seconds_*` — частота, задержки и коды ответов по каждому эндпоинту;
+- `jvm_memory_used_bytes`, `jvm_gc_pause_seconds_*`, `jvm_threads_live_threads` — состояние JVM;
+- `up` — отвечает ли сервис на опрос вообще.
+
+### Алерты
+
+Правила лежат в `monitoring/prometheus/alert-rules.yml` и видны на http://localhost:9090/alerts:
+
+| Алерт | Условие |
+|-------|---------|
+| `ServiceDown` | сервис не отвечает на опрос дольше 2 минут |
+| `ServiceFlapping` | состояние опроса менялось больше 4 раз за 15 минут (crash loop) |
+| `SlowRequests` | p95 запросов выше 150 мс в течение 5 минут (требование ТЗ) |
+| `HighErrorRate` | доля ответов 5xx выше 5% в течение 5 минут |
+| `JvmHeapPressure` | занято больше 90% heap дольше 10 минут |
+| `NoMetrics` | метрики JVM не приходят 10 минут |
+
+Маршрутизации уведомлений нет: для писем и мессенджеров нужен Alertmanager, в dev-стеке его нет,
+поэтому алерты только отображаются в Prometheus.
+
+### Grafana
+
+Дашборд `Order Platform` и datasources (Prometheus + Loki) провижионятся из `monitoring/grafana`,
+поэтому они версионируются вместе с кодом, а не живут в контейнере. На дашборде: состояние
+сервисов, запросы в секунду, доля 5xx, p95 задержки, занятость heap и панель логов. Переменная
+`Сервис` сверху фильтрует все панели сразу.
+
+### Логи
+
+Vector читает stdout/stderr контейнеров через Docker API (`/var/run/docker.sock`) и отправляет
+строки в Loki с метками `service` (имя сервиса из compose) и `container`. Конфигурация —
+`monitoring/vector/vector.toml`.
+
+Именно Vector, а не Promtail: Promtail дочитывает файлы логов Docker-демона, а на Docker Desktop
+(WSL 2) они лежат внутри виртуальной машины и в контейнер не монтируются — сбор логов молча
+возвращал бы пустоту. Vector спрашивает логи у демона через API и одинаково работает на Windows,
+macOS и Linux.
+
+Примеры запросов в Grafana → Explore (datasource Loki):
+
+```
+{service="order-service"}                      # всё, что пишет order-service
+{service=~".+-service"} |= "ERROR"             # ошибки всех сервисов
+{service="notification-service"} |= "held back"  # срабатывания лимита уведомлений
+```
 
 ## Базы данных
 

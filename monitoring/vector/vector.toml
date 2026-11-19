@@ -1,0 +1,42 @@
+# Log shipper: reads the containers' stdout/stderr through the Docker API and pushes the lines to
+# Loki.
+#
+# Vector is used instead of Promtail because Promtail tails the log *files* of the Docker daemon.
+# That works on a Linux host, but under Docker Desktop (WSL 2 backend) those files live inside the
+# VM and cannot be mounted into a container - the pipeline would silently collect nothing. Vector
+# asks the daemon for the logs over the mounted socket, so the same configuration works on Windows,
+# macOS and Linux.
+
+data_dir = "/var/lib/vector"
+
+[sources.docker]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+# A container that logs a long line in several chunks must produce one event, not a truncated one
+auto_partial_merge = true
+
+[transforms.platform]
+type = "remap"
+inputs = ["docker"]
+source = '''
+  # Compose names containers "<project>-<service>-<index>"; the compose service name is what the
+  # dashboards and the queries filter on, so it becomes a label of its own.
+  .compose_service = .label."com.docker.compose.service" || .container_name
+'''
+
+[sinks.loki]
+type = "loki"
+inputs = ["platform"]
+endpoint = "http://loki:3100"
+# Only the log line itself goes to Loki: with the default json codec every entry would be the whole
+# Vector envelope (container id, image, labels, ...), which makes the log view unreadable. The
+# metadata that is worth querying is already in the labels below.
+encoding.codec = "text"
+encoding.only_fields = ["message"]
+# Lines from several containers arrive interleaved; Loki must accept them instead of rejecting the
+# batch as out of order.
+out_of_order_action = "accept"
+
+[sinks.loki.labels]
+service = "{{ compose_service }}"
+container = "{{ container_name }}"

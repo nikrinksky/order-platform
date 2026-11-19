@@ -75,6 +75,13 @@ springdoc:
     try-it-out-enabled: true
     display-request-duration: true
 
+# Prometheus scrapes /actuator/prometheus; the other endpoints stay reachable as before.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
 ---
 # Профиль для разработки (локальный запуск в IDEA)
 spring:

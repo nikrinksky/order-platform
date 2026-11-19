@@ -419,6 +419,74 @@ services:
       - order-network
     restart: unless-stopped
 
+  # ============= OBSERVABILITY =============
+  # Metrics: every service exposes /actuator/prometheus, Prometheus scrapes them and evaluates the
+  # alert rules from monitoring/prometheus/alert-rules.yml.
+  prometheus:
+    image: prom/prometheus:v2.53.4
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  # Dashboards and datasources are provisioned from monitoring/grafana, so they are versioned with
+  # the code instead of living in the container.
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - order-network
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  # Log store. Grafana queries it through the provisioned Loki datasource.
+  loki:
+    image: grafana/loki:2.9.8
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - order-network
+    restart: unless-stopped
+
+  # Collects the stdout/stderr of every container through the Docker API and pushes it to Loki.
+  vector:
+    image: timberio/vector:0.49.0-debian
+    volumes:
+      - ./monitoring/vector/vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - vector_data:/var/lib/vector
+    command: ["--config", "/etc/vector/vector.toml"]
+    networks:
+      - order-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
   # ============= DEVELOPMENT TOOLS =============
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -485,3 +553,7 @@ volumes:
   user_db_data:
   inventory_db_data:
   order_db_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  vector_data:

@@ -53,10 +53,13 @@ spring:
               filters:
                 - StripPrefix=0
 
+            # Health and info of the auth service, kept for the smoke checks that look at the
+            # gateway. /actuator/** is deliberately not listed: it used to be proxied here, so a
+            # scrape of the gateway's own /actuator/prometheus returned the auth service metrics.
             - id: auth-service-health
               uri: ${AUTH_SERVICE_URL:http://localhost:8090}
               predicates:
-                - Path=/health, /info, /actuator/**
+                - Path=/health, /info
               filters:
                 - StripPrefix=0
 
@@ -157,7 +160,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 
 logging:
   level:
