@@ -1,0 +1,13 @@
+apiVersion: v2
+name: order-platform
+description: >-
+  Event-driven order platform: seven Spring services, the infrastructure they talk to
+  (PostgreSQL, MongoDB, Redis, Redpanda, Schema Registry, MailHog) and the monitoring stack
+  (Prometheus, Grafana, Loki, Jaeger, Vector).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - order-platform
+  - microservices
+  - spring-boot

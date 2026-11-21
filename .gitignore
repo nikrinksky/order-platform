@@ -37,6 +37,13 @@ build/
 .env
 .env.local
 .env.*.local
+
+### Dev secrets for the k3d cluster ###
+# The example file is the template; everything else in .secrets is a real credential
+/.secrets/*
+!/.secrets/dev/
+/.secrets/dev/*
+!/.secrets/dev/platform.env.example
 /Task.md
 /Task1.txt
 /.gigacode/plans/1780501398000-playful-harbor.plan.md

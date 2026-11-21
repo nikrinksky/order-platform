@@ -1,0 +1,58 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+# Everything Loki writes stays under the mounted /loki volume. The defaults point at /wal and /tmp,
+# which are not writable for the user the container runs as.
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index_cache
+    shared_store: filesystem
+  filesystem:
+    directory: /loki/chunks
+
+# Without a working directory and an explicit shared store the compactor refuses to start.
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+
+# The write-ahead log keeps accepted lines when the process stops; it needs a writable directory of
+# its own, the default /wal does not exist in the image.
+ingester:
+  wal:
+    enabled: true
+    dir: /loki/wal
+
+limits_config:
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+chunk_store_config:
+  max_look_back_period: 0s
+
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 336h

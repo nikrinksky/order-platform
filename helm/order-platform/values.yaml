@@ -1,0 +1,197 @@
+# Default values for the order-platform chart.
+#
+# The chart brings up the whole platform in a local k3d cluster: the seven services, the
+# infrastructure they talk to and the monitoring stack. This is a development deployment - the
+# passwords are the ones docker-compose uses and storage is a local-path volume.
+
+# Namespace is created by the k3d scripts (`make k3d-up`) with kubectl, not by the chart: Helm
+# cannot install into a namespace that does not exist yet without an extra flag on every command.
+namespace: order-platform
+
+images:
+  # `docker compose build` names the images <project>-<service>, which for this repository is
+  # order-platform-auth-service and so on. `make k3d-up` imports exactly those into the cluster
+  # instead of pulling them from a registry, so the prefix keeps the compose naming.
+  repositoryPrefix: order-platform-
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Profile inside the images. It resolves the infrastructure by the docker-compose names
+# (postgres, user-db, inventorydb, orderdb, mongodb, redis, redpanda, schema-registry, mailhog),
+# so the chart keeps those Service names on purpose: nothing in the services has to change.
+springProfile: docker
+
+# `make inject-secrets` creates this Secret from .secrets/dev, so a password never lands in git.
+# The reference is optional: a pod starts even before the Secret exists and the service falls back
+# to its own defaults.
+secrets:
+  name: platform-secrets
+
+tracing:
+  endpoint: http://jaeger:4318/v1/traces
+
+# Applied to every Spring service unless the entry overrides it.
+defaults:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 768Mi
+
+# One entry per Spring service. `port` is the container port; `service.nodePort` publishes the
+# entry points on the k3d load balancer, so the gateway is reachable on http://localhost:8080.
+apps:
+  api-gateway:
+    port: 8080
+    # host:port pairs an init container waits for; see templates/apps.yaml
+    waitFor:
+      - auth-service:8090
+      - redis:6379
+    env:
+      # The image defaults point at localhost, which inside a pod is the pod itself
+      AUTH_SERVICE_URL: http://auth-service:8090
+      USER_SERVICE_URL: http://user-service:8082
+      PRODUCT_SERVICE_URL: http://product-service:8089
+      INVENTORY_SERVICE_URL: http://inventory-service:8083
+      ORDER_SERVICE_URL: http://order-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+    service:
+      nodePort: 30080
+  auth-service:
+    port: 8090
+    waitFor:
+      - postgres:5432
+      - redis:6379
+      - redpanda:9092
+      - schema-registry:8081
+  user-service:
+    port: 8082
+    waitFor:
+      - user-db:5432
+      - redis:6379
+      - redpanda:9092
+      - schema-registry:8081
+  product-service:
+    port: 8089
+    waitFor:
+      - mongodb:27017
+      - redis:6379
+      - redpanda:9092
+  inventory-service:
+    port: 8083
+    waitFor:
+      - inventorydb:5432
+      - redis:6379
+      - redpanda:9092
+      - schema-registry:8081
+  order-service:
+    port: 8084
+    waitFor:
+      - orderdb:5432
+      - redis:6379
+      - redpanda:9092
+      - schema-registry:8081
+  notification-service:
+    port: 8085
+    waitFor:
+      - mongodb:27017
+      - redis:6379
+      - redpanda:9092
+      - schema-registry:8081
+      - mailhog:1025
+    env:
+      # The docker profile names the database instead of the host here, which only works while
+      # MongoDB runs in a container of that name
+      SPRING_DATA_MONGODB_HOST: mongodb
+      NOTIFICATION_EMAIL_ENABLED: "true"
+
+# PostgreSQL. Each service keeps its own instance, exactly as in docker-compose: a shared database
+# would let one service's migration break another, which is the thing the split prevents.
+postgres:
+  image: postgres:15-alpine
+  storage: 1Gi
+  storageClassName: local-path
+  # File names refer to config/postgres in the repository, mounted by the chart as ConfigMaps
+  instances:
+    - name: postgres
+      database: orderplatform
+      username: platform
+      password: dev123
+      # auth-service creates its own schema through schema.sql, so nothing has to be seeded here
+    - name: user-db
+      database: userdb
+      username: userplatform
+      password: dev123
+      initFile: user-db-init.sql
+    - name: inventorydb
+      database: inventorydb
+      username: inventoryuser
+      password: dev123
+      initFile: init-postgres-init.sql
+    - name: orderdb
+      database: orderdb
+      username: orderuser
+      password: dev123
+      initFile: init-postgres-init.sql
+
+mongodb:
+  image: mongo:7
+  rootUsername: admin
+  rootPassword: dev123
+  storage: 1Gi
+  storageClassName: local-path
+
+redis:
+  image: redis:7-alpine
+  password: dev123
+  storage: 512Mi
+  storageClassName: local-path
+
+redpanda:
+  image: redpandadata/redpanda:v23.3.1
+  storage: 2Gi
+  storageClassName: local-path
+
+schemaRegistry:
+  image: confluentinc/cp-schema-registry:7.5.0
+
+mailhog:
+  image: mailhog/mailhog:latest
+  service:
+    nodePort: 30825
+
+monitoring:
+  prometheus:
+    enabled: true
+    image: prom/prometheus:v2.53.4
+    storage: 2Gi
+    storageClassName: local-path
+    service:
+      nodePort: 30090
+  grafana:
+    enabled: true
+    image: grafana/grafana:11.3.0
+    adminUser: admin
+    adminPassword: admin
+    storage: 1Gi
+    storageClassName: local-path
+    service:
+      nodePort: 30000
+    # The dashboard panel links to the Jaeger UI. Inside the cluster the datasource uses the
+    # Service name; the link is what a developer opens in a browser, hence the node port.
+    jaegerUiUrl: http://localhost:16686
+  loki:
+    enabled: true
+    image: grafana/loki:2.9.8
+    storage: 2Gi
+    storageClassName: local-path
+  jaeger:
+    enabled: true
+    image: jaegertracing/all-in-one:1.62.0
+    service:
+      nodePort: 30686
+  vector:
+    enabled: true
+    image: timberio/vector:0.49.0-debian

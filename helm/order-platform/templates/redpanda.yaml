@@ -1,0 +1,94 @@
+{{/*
+Redpanda: the Kafka-compatible broker behind the events and the outbox. Only the internal listener
+is published - inside the cluster every client resolves redpanda:9092, so the external listener the
+compose file needs for host-side clients has no job here.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redpanda-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.redpanda.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.redpanda.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redpanda") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" . "component" "redpanda") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" . | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" . "component" "redpanda") | nindent 8 }}
+    spec:
+      containers:
+        - name: redpanda
+          image: {{ .Values.redpanda.image }}
+          args:
+            - redpanda
+            - start
+            - --kafka-addr
+            - internal://0.0.0.0:9092
+            - --advertise-kafka-addr
+            - internal://redpanda:9092
+            - --smp
+            - "1"
+            - --memory
+            - 1G
+            - --overprovisioned
+          ports:
+            - name: kafka
+              containerPort: 9092
+          readinessProbe:
+            exec:
+              command: ["rpk", "cluster", "info"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["rpk", "cluster", "info"]
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 4
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redpanda-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redpanda") | nindent 4 }}
+spec:
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redpanda") | nindent 4 }}
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka

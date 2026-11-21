@@ -1,0 +1,107 @@
+{{/*
+Vector: one DaemonSet per node, reading the pod logs the kubelet writes and shipping them to Loki.
+
+The RBAC is what the kubernetes_logs source needs: pods and namespaces to turn a log path into
+labels, and its own node to know which files belong to it.
+*/}}
+{{- if .Values.monitoring.vector.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-vector
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-vector
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-vector
+subjects:
+  - kind: ServiceAccount
+    name: vector
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+data:
+  vector.toml: |
+    {{- .Files.Get "files/vector-k8s.toml" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "vector") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" . "component" "vector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" . | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" . "component" "vector") | nindent 8 }}
+    spec:
+      serviceAccountName: vector
+      containers:
+        - name: vector
+          image: {{ .Values.monitoring.vector.image }}
+          args:
+            - --config
+            - /etc/vector/vector.toml
+          env:
+            - name: VECTOR_SELF_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/vector
+      volumes:
+        - name: config
+          configMap:
+            name: vector-config
+        - name: var-log
+          hostPath:
+            path: /var/log
+        - name: data
+          emptyDir: {}
+{{- end }}

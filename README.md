@@ -14,6 +14,8 @@ order-platform/
 ├── order-service/       # Сервис заказов
 ├── notification-service/# Сервис уведомлений
 ├── monitoring/          # Prometheus, Grafana, Loki, Vector, Jaeger (метрики, логи, трейсы)
+├── helm/order-platform/ # Helm-чарт: сервисы, инфраструктура и мониторинг для k3d
+├── .secrets/dev/        # секреты dev-окружения для кластера (в git только шаблон)
 ├── docker-compose.yaml  # Конфигурация Docker Compose
 ├── pom.xml              # Root POM файл
 └── mvnw                 # Maven Wrapper
@@ -24,6 +26,7 @@ order-platform/
 - **Java 17** (или выше)
 - **Maven 3.8+** (или используйте Maven Wrapper `mvnw`)
 - **Docker & Docker Compose** (для запуска инфраструктуры и тестов)
+- **k3d, kubectl, Helm 3** — только для запуска в Kubernetes (см. раздел «Kubernetes»)
 
 ## Быстрый старт
 
@@ -80,6 +83,77 @@ docker compose --profile dev up -d
 **Для подробной информации о локальном запуске см. [LOCAL_RUN.md](LOCAL_RUN.md)**
 
 **Для устранения проблем см. [TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
+
+### Запуск в Kubernetes (k3d + Helm)
+
+Тот же стек разворачивается в локальный кластер k3d одной командой. Нужны `k3d`, `kubectl` и
+Helm 3 (`winget install k3d.k3d Kubernetes.kubectl Helm.Helm`), Docker Desktop — как и для compose.
+
+```bash
+# 1. Освободите порты: compose и кластер публикуют одни и те же
+docker compose down
+
+# 2. Секреты: JWT_SECRET и первый администратор. Нужны до установки: auth-service объявляет
+#    jwt.secret как ${JWT_SECRET} без значения по умолчанию и не стартует без него
+cp .secrets/dev/platform.env.example .secrets/dev/platform.env   # заполните значения
+
+# 3. Кластер, образы, namespace, Secret и чарт
+make k3d-up
+
+# Применить изменённые секреты к уже работающему кластеру (перезапускает поды)
+make inject-secrets
+
+# Удаление кластера вместе с данными
+make k3d-down
+```
+
+В PowerShell те же шаги выполняют `./k3d-up.ps1`, `./inject-secrets.ps1` и `./k3d-down.ps1`.
+Порты хоста можно переопределить, если 8080/3000/9090/16686/8025 заняты:
+`make k3d-up GATEWAY_PORT=9080 GRAFANA_PORT=3300`.
+
+После запуска доступны: шлюз и Swagger UI на http://localhost:8080, Grafana на
+http://localhost:3000, Prometheus на http://localhost:9090, Jaeger на http://localhost:16686,
+MailHog на http://localhost:8025.
+
+**Что поднимается.** Один Helm-чарт `helm/order-platform` в namespace `order-platform`:
+7 сервисов, 4 инстанса PostgreSQL (`postgres`, `user-db`, `inventorydb`, `orderdb`), MongoDB,
+Redis, Redpanda, Schema Registry, MailHog и весь мониторинг — Prometheus с теми же правилами
+алертов, Grafana с теми же datasources и дашбордом, Loki, Jaeger и Vector.
+
+**Почему сервисы не пришлось менять.** Имена Service в чарте повторяют имена контейнеров в
+compose (`postgres`, `user-db`, `mongodb`, `redpanda`, …), поэтому образы запускаются с уже
+существующим профилем `docker` и ни один `application.yml` не правился.
+
+**Образы не тянутся из registry.** `make k3d-up` собирает их через `docker compose build` и
+загружает в кластер скриптом `scripts/import-images.{sh,ps1}`: он идёт через containerd
+(`docker save` → `ctr images import --platform linux/amd64`). Штатный `k3d image import` для
+multi-arch образов (redpanda, schema-registry, mailhog) молча падает с `content digest not found`,
+и поды потом полчаса висят в `ContainerCreating`, пытаясь скачать образ из Docker Hub.
+Вместе с сервисами импортируются и образы инфраструктуры и мониторинга, поэтому первый старт
+не зависит от скорости Docker Hub.
+
+**Секреты.** `make k3d-up` создаёт Secret `platform-secrets` из `.secrets/dev/platform.env`
+(файл в `.gitignore`, в репозитории только шаблон) до установки чарта: без `JWT_SECRET`
+auth-service не стартует. `make inject-secrets` делает то же самое и перезапускает поды — им
+нужен рестарт, чтобы прочитать изменившиеся значения.
+
+**Данные.** Тома — PVC на классе `local-path`, который k3d ставит по умолчанию: данные переживают
+перезапуск пода, но удаляются вместе с кластером (`k3d cluster delete`).
+
+**Отличия от compose.** Vector в кластере читает не Docker-сокет, а файлы подов через API
+(`kubernetes_logs` с фильтром по метке `app.kubernetes.io/part-of=order-platform`); Redis и
+PostgreSQL имеют по одному тому на инстанс и стратегию `Recreate`, потому что том `ReadWriteOnce`
+нельзя смонтировать в два пода. Полному стеку нужно около 7 ГБ памяти Docker Desktop.
+
+**Две ловушки Kubernetes, из-за которых чарт выглядит странно.**
+
+- `enableServiceLinks: false` у подов. Kubernetes сам создаёт переменные `<SERVICE>_PORT` и
+  `<SERVICE>_SERVICE_HOST` для каждого Service в namespace, и Service с именем `schema-registry`
+  даёт `SCHEMA_REGISTRY_PORT` — а стартовый скрипт образа Schema Registry считает эту переменную
+  устаревшей настройкой порта и завершается с кодом 1.
+- `startupProbe` у сервисов. Контекст Spring Boot на узле с ограниченными ресурсами поднимается
+  минуту-две, и liveness-проба успевала убить под до того, как приложение начнёт отвечать. Со
+  startup-пробой остальные две ждут первого успешного ответа.
 
 ## Тестирование
 
@@ -179,11 +253,14 @@ Testcontainers на Linux работают без проблем через Unix
   `http://localhost:4318/v1/traces` (локальный запуск), в `docker-compose` — `http://jaeger:4318/v1/traces`
 - `OTEL_TRACING_SAMPLING_PROBABILITY` - доля запросов, попадающих в трейсы (0.0–1.0).
   По умолчанию `1.0`: в dev пишутся все трейсы, в проде значение уменьшают
+- `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` в кластере приходят из Secret `platform-secrets`,
+  который создаётся из `.secrets/dev/platform.env` командой `make inject-secrets` (шаблон —
+  `.secrets/dev/platform.env.example`)
 
 ## Порталы и инструменты
 
 После запуска через `docker compose up -d` (профиль `dev` дополнительно поднимает pgAdmin,
-mongo-express и redis-commander):
+mongo-express и redis-commander). В Kubernetes адреса те же — кластер публикует те же порты хоста:
 
 | Инструмент | URL | Логин | Пароль |
 |------------|-----|-------|--------|
@@ -191,13 +268,13 @@ mongo-express и redis-commander):
 | **Swagger UI (все сервисы)** | http://localhost:8080/swagger-ui.html | - | - |
 | Auth Service | http://localhost:8090 | - | - |
 | User Service | http://localhost:8082 | - | - |
-| pgAdmin | http://localhost:5050 | admin@orderplatform.com | admin |
-| mongo-express | http://localhost:8087 | admin | admin |
-| redis-commander | http://localhost:8088 | - | - |
+| pgAdmin (только compose) | http://localhost:5050 | admin@orderplatform.com | admin |
+| mongo-express (только compose) | http://localhost:8087 | admin | admin |
+| redis-commander (только compose) | http://localhost:8088 | - | - |
 | MailHog (письма notification-service) | http://localhost:8025 | - | - |
 | Grafana (метрики и логи) | http://localhost:3000 | admin | admin |
 | Prometheus (запросы и алерты) | http://localhost:9090 | - | - |
-| Loki (API хранилища логов) | http://localhost:3100 | - | - |
+| Loki (API хранилища логов, только compose) | http://localhost:3100 | - | - |
 | Jaeger (трейсы) | http://localhost:16686 | - | - |
 
 ### Swagger UI и OpenAPI
