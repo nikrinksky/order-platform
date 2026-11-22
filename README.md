@@ -13,8 +13,12 @@ order-platform/
 ├── inventory-service/   # Сервис инвентаря
 ├── order-service/       # Сервис заказов
 ├── notification-service/# Сервис уведомлений
+├── common-security/     # Общая JWT-аутентификация для всех сервисов
+├── common-events/       # Avro-схемы событий и сгенерированные классы
+├── outbox-spring-boot-starter/ # Транзакционный outbox для публикации в Kafka
 ├── monitoring/          # Prometheus, Grafana, Loki, Vector, Jaeger (метрики, логи, трейсы)
 ├── helm/order-platform/ # Helm-чарт: сервисы, инфраструктура и мониторинг для k3d
+├── scripts/             # Импорт образов в k3d и вспомогательные скрипты
 ├── .secrets/dev/        # секреты dev-окружения для кластера (в git только шаблон)
 ├── docker-compose.yaml  # Конфигурация Docker Compose
 ├── pom.xml              # Root POM файл
@@ -244,7 +248,7 @@ kubeconform -strict -summary -kubernetes-version 1.31.5 /tmp/default.yaml /tmp/m
 .\mvnw.cmd test
 ```
 
-Для подробной информации см. [IDEA_DOCKER_SETUP.md](IDEA_DOCKER_SETUP.md)
+Для подробной информации см. [TESTING.md](TESTING.md)
 
 ## Конфигурация
 
@@ -524,12 +528,12 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 
 ## Технологии
 
-- **Backend**: Spring Boot 3.2.12, Java 17
+- **Backend**: Spring Boot 3.5.16, Spring Cloud 2025.0.3, Java 17
 - **Database**: PostgreSQL 15, MongoDB 7, Redis 7
-- **Messaging**: Kafka (Redpanda)
-- **Security**: Spring Security 6.5.9 (CVE-2026-22732 fixed)
-- **Containerization**: Docker, Docker Compose
-- **Monitoring**: Spring Actuator
+- **Messaging**: Kafka (Redpanda 23.3) + Schema Registry, события в формате Avro
+- **Security**: Spring Security 6.5.11, JWT
+- **Containerization**: Docker, Docker Compose, Kubernetes (k3d + Helm)
+- **Monitoring**: Micrometer и Prometheus, Grafana, Loki, Vector, Jaeger (OpenTelemetry)
 
 ### Архитектура
 
@@ -589,10 +593,10 @@ HTTP-контракт ошибок: `400` — невалидные данные/
 - ✅ auth-service (с полной моделью пользователя в схеме `auth`)
 - ✅ api-gateway
 - ✅ user-service (с проекцией пользователя в схеме `user_profile`)
-- ⏳ product-service
-- ⏳ inventory-service
-- ⏳ order-service
-- ⏳ notification-service
+- ✅ product-service
+- ✅ inventory-service
+- ✅ order-service
+- ✅ notification-service
 
 ### Архитектурные изменения
 
@@ -601,8 +605,10 @@ HTTP-контракт ошибок: `400` — невалидные данные/
 | Разделение БД (auth-service и user-service) | ✅ Завершено |
 | Новые схемы: `auth` и `user_profile` | ✅ Завершено |
 | Kafka события: `user.created` и `user.updated` | ✅ Завершено |
-| Инициализация схем (init-db-schemas.ps1) | ✅ Завершено |
-| Spring Security 6.5.9 (CVE-2026-22732 fixed) | ✅ Завершено |
+| Транзакционный outbox с письмами в `<topic>.DLT` | ✅ Завершено |
+| Идемпотентное резервирование остатков и компенсации | ✅ Завершено |
+| Метрики, логи и трейсы (Prometheus, Loki, Jaeger) | ✅ Завершено |
+| Запуск в Kubernetes (k3d + Helm) | ✅ Завершено |
 
 ---
 
