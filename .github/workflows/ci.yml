@@ -131,6 +131,64 @@ jobs:
             -DfailOnError=false \
             -DsuppressionFile=${{ github.workspace }}/config/dependency-check-suppression.xml
 
+  # The Helm chart is a deployment artifact like the jars, but no other job looks at it: a broken
+  # template or a typo in values.yaml reached dev unnoticed until someone ran `make k3d-up`. The
+  # job is cheap (seconds, no JVM, no Docker), so it runs on every PR instead of only on push.
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HELM_VERSION: v3.16.3
+      KUBECONFORM_VERSION: v0.8.0
+      # The version the k3d cluster runs. Pinned on purpose: kubeconform defaults to the "master"
+      # schemas, so an upstream Kubernetes release could start failing a chart that still installs
+      # into the cluster. Bump this together with the k3s image in the k3d scripts.
+      KUBERNETES_VERSION: "1.31.5"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      # --strict turns a lint warning into a failure. Without it Helm prints "WARNING" and exits 0,
+      # which is how a missing value or a deprecated field slips through.
+      - name: Lint the chart
+        run: helm lint --strict helm/order-platform
+
+      - name: Install kubeconform
+        run: |
+          curl -sSLo kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      # Two renders: the defaults and the chart with the whole monitoring stack switched off.
+      # Every monitoring object sits behind {{- if .Values.monitoring.*.enabled }}, so the second
+      # render is the only one that exercises those branches - and a mistake there (a reference to
+      # a value that is only defined in the enabled path) is invisible in the first.
+      #
+      # -strict also rejects fields the schema does not know, which is what catches a typo like
+      # `nodePorts` instead of `nodePort`. No -ignore-missing-schemas: the chart ships only
+      # built-in kinds, so an unknown one means a mistake rather than a CRD.
+      - name: Validate the rendered manifests
+        run: |
+          helm template order-platform helm/order-platform \
+            --namespace order-platform > /tmp/default.yaml
+
+          helm template order-platform helm/order-platform \
+            --namespace order-platform \
+            --set monitoring.prometheus.enabled=false \
+            --set monitoring.grafana.enabled=false \
+            --set monitoring.loki.enabled=false \
+            --set monitoring.jaeger.enabled=false \
+            --set monitoring.vector.enabled=false > /tmp/minimal.yaml
+
+          kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
+            /tmp/default.yaml /tmp/minimal.yaml
+
   # One matrix entry per service: the seven images are built and scanned in parallel instead of
   # one after another on a single runner. Each Dockerfile is multi-stage and builds its jar from
   # the sibling modules, so the context stays the repository root.

@@ -186,6 +186,38 @@ mvn verify -Pintegration-tests
 
 Testcontainers на Linux работают без проблем через Unix socket `/var/run/docker.sock`.
 
+### Проверки Helm-чарта
+
+Отдельная job `helm` в пайплайне смотрит на `helm/order-platform`: без неё сломанный шаблон
+доходил до `dev`, потому что ни одна другая проверка чарт не читает.
+
+```bash
+helm lint --strict helm/order-platform
+
+helm template order-platform helm/order-platform --namespace order-platform > /tmp/default.yaml
+helm template order-platform helm/order-platform --namespace order-platform \
+  --set monitoring.prometheus.enabled=false --set monitoring.grafana.enabled=false \
+  --set monitoring.loki.enabled=false --set monitoring.jaeger.enabled=false \
+  --set monitoring.vector.enabled=false > /tmp/minimal.yaml
+
+kubeconform -strict -summary -kubernetes-version 1.31.5 /tmp/default.yaml /tmp/minimal.yaml
+```
+
+Локально те же шаги выполняет `make helm-check`. `kubeconform` в стек не входит — его нужно
+поставить отдельно (`winget install Kubernetes.kubeconform` или бинарник из
+[релизов](https://github.com/yannh/kubeconform/releases)).
+
+Что именно ловят проверки:
+
+- `helm lint --strict` — ошибки и **предупреждения** шаблонов: без `--strict` Helm печатает
+  `WARNING` и всё равно выходит с кодом 0, поэтому пропущенное значение проходило молча;
+- два рендера — ветки `{{- if .Values.monitoring.*.enabled }}`: с включённым мониторингом
+  проверяется основной путь, с выключенным — тот, где объекты не создаются, и ошибка вроде
+  ссылки на значение из включённой ветки видна только во втором;
+- `kubeconform -strict` — соответствие схеме Kubernetes: неизвестное поле (`nodePorts` вместо
+  `nodePort`) считается ошибкой. Версия схемы зафиксирована (`1.31.5`, как в k3d), чтобы выход
+  новой версии Kubernetes не ломал чарт, который в кластер ставится.
+
 ### Тестирование в IntelliJ IDEA
 
 **Вариант 1: Через Maven** (Рекомендуется)
