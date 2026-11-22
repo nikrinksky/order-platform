@@ -1,0 +1,110 @@
+{{/*
+The seven Spring services. One Deployment and one Service per entry of .Values.apps, so adding a
+service is a values change and not a new template.
+
+Every service waits for the infrastructure it needs through an init container. Without it a pod
+starts before its database accepts connections, Spring fails the context and the container
+restarts in a loop - which looks like a crash but is only a missing dependency.
+*/}}
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $name) | nindent 4 }}
+spec:
+  replicas: {{ $app.replicas | default $.Values.defaults.replicas }}
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" $ "component" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" $ | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" $ "component" $name) | nindent 8 }}
+    spec:
+      # Kubernetes injects <SERVICE>_PORT and <SERVICE>_SERVICE_HOST for every Service in the
+      # namespace. A service called order-service therefore gets ORDER_SERVICE_PORT, which is the
+      # kind of variable a library may read by accident; nothing here relies on them.
+      enableServiceLinks: false
+      {{- with $app.waitFor }}
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              {{- range . }}
+              until nc -z {{ (splitList ":" .) | first }} {{ (splitList ":" .) | last }}; do
+                echo "waiting for {{ . }}"; sleep 2
+              done
+              {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "order-platform.image" (dict "context" $ "name" $name "isApp" true) }}
+          imagePullPolicy: {{ $.Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $app.port }}
+          env:
+            {{- include "order-platform.springEnv" $ | nindent 12 }}
+            {{- range $key, $value := $app.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          # A Spring Boot context takes a minute or two on a constrained node, and the liveness
+          # probe used to kill the pod before it finished starting (then it restarted and started
+          # faster, which looked like a random crash). The startup probe holds both other probes
+          # back until the application answers for the first time.
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          # The actuator health endpoint reports the datasource and the broker too, so a pod that
+          # cannot reach its database is taken out of the Service instead of serving errors.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 4
+          resources:
+            {{- toYaml ($app.resources | default $.Values.defaults.resources) | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $name) | nindent 4 }}
+spec:
+  # The gateway is the only entry point a client needs; the rest stay cluster-internal, the same
+  # way compose publishes them for debugging but nothing depends on that.
+  type: {{ if $app.service }}NodePort{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: http
+      {{- if and $app.service $app.service.nodePort }}
+      nodePort: {{ $app.service.nodePort }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,86 @@
+{{/*
+Redis: the rate limiter buckets, the token blacklist and the caches. The append-only file keeps
+them across a pod restart, which matters because a lost blacklist would revive revoked tokens.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.redis.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redis") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" . | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" . "component" "redis") | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --requirepass
+            - {{ .Values.redis.password | quote }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-a", {{ .Values.redis.password | quote }}, "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-a", {{ .Values.redis.password | quote }}, "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 4
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redis") | nindent 4 }}
+spec:
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "redis") | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis

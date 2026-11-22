@@ -1,0 +1,19 @@
+# Tells Grafana to load every dashboard JSON from the mounted directory, so the dashboards live in
+# the repository instead of in the container's database.
+#
+# This file is mounted into /etc/grafana/provisioning/dashboards and deliberately kept outside
+# monitoring/grafana/dashboards: everything in that directory is read as a dashboard, and a YAML
+# file lying next to the JSONs produced an empty "Order Platform" entry.
+apiVersion: 1
+
+providers:
+  - name: order-platform
+    orgId: 1
+    folder: Order Platform
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

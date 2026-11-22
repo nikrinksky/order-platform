@@ -1,0 +1,79 @@
+{{/*
+Confluent Schema Registry: the Avro schemas of the four topics. The services register their
+schemas on the first publish, so the registry only has to reach the broker.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "schema-registry") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" . "component" "schema-registry") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" . | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" . "component" "schema-registry") | nindent 8 }}
+    spec:
+      # Kubernetes injects <SERVICE>_PORT for every Service in the namespace, so a Service named
+      # schema-registry produces SCHEMA_REGISTRY_PORT - and the image's configure script treats
+      # that variable as the deprecated port setting and exits with 1. The links are not used by
+      # anything here, so they are switched off.
+      enableServiceLinks: false
+      # The registry needs a live broker to serve its own health endpoint, so it waits for it
+      initContainers:
+        - name: wait-for-redpanda
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - until nc -z redpanda 9092; do echo "waiting for redpanda:9092"; sleep 2; done
+      containers:
+        - name: schema-registry
+          image: {{ .Values.schemaRegistry.image }}
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+              value: PLAINTEXT://redpanda:9092
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              value: schema-registry
+            - name: SCHEMA_REGISTRY_LISTENERS
+              value: http://0.0.0.0:8081
+          readinessProbe:
+            httpGet:
+              path: /subjects
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /subjects
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 4
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "schema-registry") | nindent 4 }}
+spec:
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "schema-registry") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http

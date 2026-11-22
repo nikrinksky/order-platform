@@ -1,0 +1,126 @@
+{{/*
+PostgreSQL instances. One per entry of .Values.postgres.instances - auth-service, user-service,
+inventory-service and order-service each keep their own database, as they do in docker-compose.
+
+The init scripts are mounted into /docker-entrypoint-initdb.d, which the image runs once, when the
+data directory is still empty: the same contract the compose file relies on.
+*/}}
+{{- range $instance := .Values.postgres.instances }}
+{{- if $instance.initFile }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $instance.name }}-init
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+data:
+  {{ $instance.initFile }}: |
+    {{- $.Files.Get (printf "files/%s" $instance.initFile) | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $instance.name }}-data
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # local-path is the storage class k3d installs by default, so no CSI driver has to be added
+  storageClassName: {{ $.Values.postgres.storageClassName }}
+  resources:
+    requests:
+      storage: {{ $.Values.postgres.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $instance.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $instance.name) | nindent 4 }}
+spec:
+  # The data lives on a ReadWriteOnce volume, so a second replica would only fight for it
+  replicas: 1
+  # Recreate, not RollingUpdate: the old pod has to release the volume before the new one mounts it
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" $ "component" $instance.name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" $ | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" $ "component" $instance.name) | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ $.Values.postgres.image }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ $instance.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ $instance.username | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ $instance.password | quote }}
+            # A subdirectory, so the image's own entrypoint can initialise a freshly mounted volume
+            # even when the filesystem root of the volume is not empty
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $instance.username | quote }}, "-d", {{ $instance.database | quote }}]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $instance.username | quote }}, "-d", {{ $instance.database | quote }}]
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 4
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            {{- if $instance.initFile }}
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $instance.name }}-data
+        {{- if $instance.initFile }}
+        - name: init
+          configMap:
+            name: {{ $instance.name }}-init
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $instance.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" $ | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $instance.name) | nindent 4 }}
+spec:
+  # The name has to stay the one the docker profile resolves (user-db, inventorydb, orderdb), so
+  # the services need no new profile to run in the cluster
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" $ "component" $instance.name) | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+{{- end }}

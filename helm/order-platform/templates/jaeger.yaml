@@ -1,0 +1,63 @@
+{{/*
+Jaeger: the trace collector and UI. The services ship OTLP/HTTP spans to jaeger:4318; the UI is the
+one page a developer opens, so it gets a node port.
+*/}}
+{{- if .Values.monitoring.jaeger.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "jaeger") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "order-platform.selectorLabels" (dict "context" . "component" "jaeger") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "order-platform.labels" . | nindent 8 }}
+        {{- include "order-platform.selectorLabels" (dict "context" . "component" "jaeger") | nindent 8 }}
+    spec:
+      containers:
+        - name: jaeger
+          image: {{ .Values.monitoring.jaeger.image }}
+          ports:
+            - name: ui
+              containerPort: 16686
+            - name: otlp-http
+              containerPort: 4318
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ui
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "order-platform.labels" . | nindent 4 }}
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "jaeger") | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    {{- include "order-platform.selectorLabels" (dict "context" . "component" "jaeger") | nindent 4 }}
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: ui
+      nodePort: {{ .Values.monitoring.jaeger.service.nodePort }}
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+{{- end }}

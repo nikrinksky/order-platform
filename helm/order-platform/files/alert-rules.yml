@@ -1,0 +1,83 @@
+# Alert rules for the platform. They are evaluated by Prometheus and listed at /alerts; routing
+# them somewhere (mail, Telegram) needs an Alertmanager, which is not part of the dev stack.
+groups:
+  - name: availability
+    rules:
+      # A service that does not answer the scrape for two minutes is either down or hung.
+      - alert: ServiceDown
+        expr: up{job=~".+-service|api-gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is not answering the scrape"
+          description: >-
+            {{ $labels.job }} at {{ $labels.instance }} has been unreachable for more than
+            two minutes. Check the container and its health endpoint.
+
+      - alert: ServiceFlapping
+        expr: changes(up{job=~".+-service|api-gateway"}[15m]) > 4
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} keeps restarting"
+          description: >-
+            {{ $labels.job }} changed its scrape state more than four times in fifteen minutes,
+            which usually means a crash loop or an unstable dependency.
+
+  - name: traffic
+    rules:
+      # NFR: p95 of REST requests must stay under 150 ms.
+      - alert: SlowRequests
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum by (le, job) (rate(http_server_requests_seconds_bucket{job=~".+-service|api-gateway"}[5m]))
+          ) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency of {{ $labels.job }} is above 150 ms"
+          description: >-
+            95% of the requests handled by {{ $labels.job }} took longer than 150 ms over the last
+            five minutes, which breaks the latency target of the specification.
+
+      - alert: HighErrorRate
+        expr: >-
+          sum by (job) (rate(http_server_requests_seconds_count{status=~"5..",job=~".+-service|api-gateway"}[5m]))
+            /
+          sum by (job) (rate(http_server_requests_seconds_count{job=~".+-service|api-gateway"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} returns server errors on more than 5% of the requests"
+          description: >-
+            The share of 5xx answers of {{ $labels.job }} stayed above 5% for five minutes.
+            Check the service logs in Grafana for the failing endpoint.
+
+  - name: runtime
+    rules:
+      - alert: JvmHeapPressure
+        expr: max by (job) (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} has used more than 90% of its heap for ten minutes"
+          description: >-
+            The JVM of {{ $labels.job }} is close to its heap limit, so a load spike would end in
+            an OutOfMemoryError instead of a slow answer.
+
+      - alert: NoMetrics
+        expr: absent(jvm_memory_used_bytes{job=~".+-service|api-gateway"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No JVM metrics are arriving"
+          description: >-
+            Prometheus has not received a JVM metric for ten minutes. The actuator endpoint may be
+            closed or the exporter missing from the build.

@@ -1,0 +1,42 @@
+# Log shipper for the cluster: reads the pod logs the kubelet writes and pushes the lines to Loki.
+#
+# Same idea as monitoring/vector/vector.toml, different source. Compose reads the Docker daemon
+# through its socket, which does not exist in a cluster; here the kubelet already writes every
+# container's output under /var/log/pods, so Vector reads those files and asks the API only for the
+# metadata that turns a path into a service name.
+
+data_dir = "/var/lib/vector"
+
+[sources.k8s]
+type = "kubernetes_logs"
+# Only the pods of the platform: a cluster runs plenty of other workloads whose logs nobody asked
+# for, and the selector keeps the volume and the label cardinality down.
+extra_label_selector = "app.kubernetes.io/part-of=order-platform"
+# A container that logs a long line in several chunks must produce one event, not a truncated one
+auto_partial_merge = true
+
+[transforms.platform]
+type = "remap"
+inputs = ["k8s"]
+source = '''
+  # The chart labels every pod with app.kubernetes.io/name, which is the service name the
+  # dashboards and the queries filter on
+  .service = .kubernetes.pod_labels."app.kubernetes.io/name" || .kubernetes.container_name
+  .container = .kubernetes.container_name
+'''
+
+[sinks.loki]
+type = "loki"
+inputs = ["platform"]
+endpoint = "http://loki:3100"
+# Only the log line itself goes to Loki: with the default json codec every entry would be the whole
+# Vector envelope (pod name, image, labels, ...), which makes the log view unreadable
+encoding.codec = "text"
+encoding.only_fields = ["message"]
+# Lines from several pods arrive interleaved; Loki must accept them instead of rejecting the batch
+# as out of order
+out_of_order_action = "accept"
+
+[sinks.loki.labels]
+service = "{{ service }}"
+container = "{{ container }}"
