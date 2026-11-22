@@ -1,4 +1,5 @@
-.PHONY: dev-up dev-down dev-build k3d-up k3d-down create-secrets inject-secrets helm-lint helm-template
+﻿.PHONY: dev-up dev-down dev-build k3d-up k3d-down create-secrets inject-secrets \
+        helm-lint helm-template helm-check
 
 # Local compose stack
 dev-up:
@@ -114,7 +115,26 @@ inject-secrets: create-secrets
 		$(foreach s,$(SERVICES),$(s))
 
 helm-lint:
-	helm lint $(CHART)
+	helm lint --strict $(CHART)
 
 helm-template:
 	helm template $(RELEASE) $(CHART) --namespace $(NAMESPACE)
+
+# What the `helm` job of the pipeline runs, so a failure can be reproduced locally before the push.
+# kubeconform is not part of the stack: install it from https://github.com/yannh/kubeconform
+# (winget install Kubernetes.kubeconform, or a release binary in PATH).
+KUBERNETES_VERSION ?= 1.31.5
+# GNU Make on Windows runs the recipes through sh (MSYS/Git Bash), so /tmp exists there too
+TMPDIR ?= /tmp
+helm-check: helm-lint
+	@command -v kubeconform >/dev/null 2>&1 || \
+		(echo "kubeconform is not installed - see https://github.com/yannh/kubeconform/releases"; exit 1)
+	helm template $(RELEASE) $(CHART) --namespace $(NAMESPACE) > $(TMPDIR)/default.yaml
+	helm template $(RELEASE) $(CHART) --namespace $(NAMESPACE) \
+		--set monitoring.prometheus.enabled=false \
+		--set monitoring.grafana.enabled=false \
+		--set monitoring.loki.enabled=false \
+		--set monitoring.jaeger.enabled=false \
+		--set monitoring.vector.enabled=false > $(TMPDIR)/minimal.yaml
+	kubeconform -strict -summary -kubernetes-version $(KUBERNETES_VERSION) \
+		$(TMPDIR)/default.yaml $(TMPDIR)/minimal.yaml
