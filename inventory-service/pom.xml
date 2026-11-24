@@ -67,6 +67,18 @@
             <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- gRPC contract shared with order-service: the generated service base class and messages -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The internal API order-service calls. The server listens on its own port, next to the
+             servlet container: the public REST API stays as it is. -->
+        <dependency>
+            <groupId>org.springframework.grpc</groupId>
+            <artifactId>spring-grpc-server-spring-boot-starter</artifactId>
+        </dependency>
         <!-- Avro event contracts: the types published to Kafka come from here,
              so producer and consumer share one schema definition -->
         <dependency>

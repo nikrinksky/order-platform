@@ -3,9 +3,9 @@ package com.orderplatform.order.client;
 /**
  * Абстракция инвентарь-сервиса для order-service.
  *
- * <p>Назначение — отделить бизнес-логику заказа от HTTP-деталей и сделать
- * операции с остатками тестируемыми без URL-паттернов. Реализация по
- * умолчанию — {@link RestTemplateInventoryClient}.</p>
+ * <p>Назначение — отделить бизнес-логику заказа от транспорта и сделать
+ * операции с остатками тестируемыми. Реализация по умолчанию —
+ * {@link InventoryGrpcClient}: вызов идёт по gRPC, а не по HTTP.</p>
  */
 public interface InventoryClient {
 

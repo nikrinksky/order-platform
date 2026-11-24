@@ -81,6 +81,9 @@ apps:
       - redpanda:9092
   inventory-service:
     port: 8083
+    # The internal gRPC API order-service calls for stock operations. Kept next to the HTTP port
+    # because the service listens on both.
+    grpcPort: 9095
     waitFor:
       - inventorydb:5432
       - redis:6379

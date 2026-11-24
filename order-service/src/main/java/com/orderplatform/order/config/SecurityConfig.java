@@ -52,8 +52,8 @@ public class SecurityConfig {
     /**
      * Disabled when {@code spring.security.enabled=false}, which the integration test profile sets
      * so that {@code TestSecurityConfig} can supply its permit-all chain instead. The condition is
-     * on the bean rather than the class on purpose: {@link #restTemplate()} is still needed by
-     * {@code RestTemplateInventoryClient} in that profile.
+     * on the bean rather than the class on purpose: {@link #restTemplate()} is still needed for the
+     * catalogue lookup in that profile.
      */
     @Bean
     @ConditionalOnProperty(name = "spring.security.enabled", havingValue = "true", matchIfMissing = true)
@@ -79,16 +79,16 @@ public class SecurityConfig {
     }
 
     /**
-     * The client order-service uses to call other services.
+     * The client order-service uses to read the catalogue.
      *
-     * <p>It relays the caller's {@code Authorization} header: inventory-service now requires an
-     * administrator or a manager role for its reserve/release endpoints, so the token of the
-     * operator who triggered the reservation has to travel with the call. A call made outside a
-     * request (no header to relay) is left unauthenticated and is refused downstream, which keeps
-     * the saga fail-closed instead of silently reserving stock without an identity.
+     * <p>It relays the caller's {@code Authorization} header, so the catalogue call carries the
+     * identity of the operator as well. A call made outside a request (no header to relay) is left
+     * unauthenticated and is refused downstream.
      *
      * <p>The registry makes each call a span of its own and puts the trace context into the
-     * outgoing headers, so a checkout and the reservation it triggers are one trace.
+     * outgoing headers, so a checkout and the calls it triggers are one trace. Stock operations no
+     * longer use this bean: they run over gRPC, and {@code JwtClientInterceptor} relays the token
+     * there.
      */
     @Bean
     public RestTemplate restTemplate() {
