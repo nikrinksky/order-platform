@@ -66,6 +66,17 @@
             <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- gRPC contract shared with inventory-service: the generated stub and messages -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The stock calls run over gRPC; the REST client stays for the catalogue lookup -->
+        <dependency>
+            <groupId>org.springframework.grpc</groupId>
+            <artifactId>spring-grpc-client-spring-boot-starter</artifactId>
+        </dependency>
         <!-- Avro event contracts: the types published to Kafka come from here,
              so producer and consumer share one schema definition -->
         <dependency>
@@ -139,6 +150,14 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Runs a real gRPC server and channel inside the test JVM: the client is tested against
+             the generated service, not against a mock of the stub. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
+            <version>1.76.0</version>
             <scope>test</scope>
         </dependency>
 

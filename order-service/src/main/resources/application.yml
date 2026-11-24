@@ -5,6 +5,15 @@ spring:
   # Also the service name in traces and metrics: without it spans land under "unknown_service".
   application:
     name: order-service
+  # Stock operations go to inventory-service over gRPC. The address and the deadline live here,
+  # not in code; "static://" tells the resolver the name is a plain host:port, not a DNS scheme.
+  grpc:
+    client:
+      channels:
+        inventory:
+          address: ${INVENTORY_GRPC_ADDRESS:static://localhost:9095}
+          # A hung stock call must fail the order instead of holding the request open.
+          default-deadline: 5s
   datasource:
     url: jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5435}/orderdb
     username: ${SPRING_DATASOURCE_USERNAME:orderuser}
@@ -72,8 +81,6 @@ outbox:
 services:
   product-service:
     url: ${PRODUCT_SERVICE_URL:http://product-service:8089}
-  inventory-service:
-    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8083}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hmac-sha}
@@ -111,6 +118,12 @@ spring:
   config:
     activate:
       on-profile: docker
+  grpc:
+    client:
+      channels:
+        inventory:
+          address: ${INVENTORY_GRPC_ADDRESS:static://inventory-service:9095}
+          default-deadline: 5s
   datasource:
     url: jdbc:postgresql://orderdb:5432/orderdb
     username: ${SPRING_DATASOURCE_USERNAME:orderuser}
@@ -144,5 +157,3 @@ spring:
 services:
   product-service:
     url: ${PRODUCT_SERVICE_URL:http://product-service:8089}
-  inventory-service:
-    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8083}

@@ -53,6 +53,12 @@ spec:
           ports:
             - name: http
               containerPort: {{ $app.port }}
+            {{- with $app.grpcPort }}
+            # The internal gRPC API. It is not published on the load balancer: only the services
+            # in the namespace call it.
+            - name: grpc
+              containerPort: {{ . }}
+            {{- end }}
           env:
             {{- include "order-platform.springEnv" $ | nindent 12 }}
             {{- range $key, $value := $app.env }}
@@ -107,4 +113,11 @@ spec:
       {{- if and $app.service $app.service.nodePort }}
       nodePort: {{ $app.service.nodePort }}
       {{- end }}
+    {{- with $app.grpcPort }}
+    # A Service only forwards the ports it declares: without this entry the name resolves but a
+    # call to :9095 never reaches the pod.
+    - name: grpc
+      port: {{ . }}
+      targetPort: grpc
+    {{- end }}
 {{- end }}

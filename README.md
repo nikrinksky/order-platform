@@ -15,6 +15,7 @@ order-platform/
 ├── notification-service/# Сервис уведомлений
 ├── common-security/     # Общая JWT-аутентификация для всех сервисов
 ├── common-events/       # Avro-схемы событий и сгенерированные классы
+├── common-grpc/         # protobuf-контракт и сгенерированные gRPC-стабы
 ├── outbox-spring-boot-starter/ # Транзакционный outbox для публикации в Kafka
 ├── monitoring/          # Prometheus, Grafana, Loki, Vector, Jaeger (метрики, логи, трейсы)
 ├── helm/order-platform/ # Helm-чарт: сервисы, инфраструктура и мониторинг для k3d
@@ -272,6 +273,9 @@ kubeconform -strict -summary -kubernetes-version 1.31.5 /tmp/default.yaml /tmp/m
 - `SPRING_DATASOURCE_URL` - JDBC URL для PostgreSQL
 - `SPRING_DATA_REDIS_HOST` - хост Redis
 - `SPRING_KAFKA_BOOTSTRAP_SERVERS` - сервер Kafka (redpanda:9092 в Docker)
+- `GRPC_SERVER_PORT` - порт gRPC-сервера inventory-service (по умолчанию `9095`)
+- `INVENTORY_GRPC_ADDRESS` - адрес gRPC inventory-service для order-service
+  (`static://localhost:9095` локально, `static://inventory-service:9095` в Docker и Kubernetes)
 - `NOTIFICATION_EMAIL_ENABLED` - отправлять ли письма из notification-service. По умолчанию `false`
   (локальный запуск без почтового сервера), в `docker-compose` включено и письма уходят в MailHog
 - `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` - SMTP-сервер для notification-service
@@ -402,9 +406,11 @@ OTLP/HTTP в Jaeger (`jaegertracing/all-in-one`, UI — http://localhost:16686).
 
 - **входящие HTTP-запросы** — спан на каждый запрос; заголовок `traceparent` от вызывающего
   продолжает его трейс, поэтому запрос через шлюз и работа сервиса лежат в одном трейсе;
-- **исходящий вызов order-service → inventory-service** — RestTemplate получает
-  `ObservationRegistry`, контекст уходит в заголовке, и резервирование остатка видно в том же
-  трейсе, что и создание заказа;
+- **исходящий вызов order-service → inventory-service** — gRPC: Spring gRPC включает
+  наблюдаемость автоматически (Micrometer), контекст уходит в metadata, и резервирование остатка
+  видно в том же трейсе, что и создание заказа;
+- **исходящий вызов order-service → product-service** — RestTemplate получает
+  `ObservationRegistry`, контекст уходит в заголовке;
 - **публикация в Kafka** — `spring.kafka.template.observation-enabled: true` (auth-service,
   user-service) и явные `setObservationRegistry` / `setObservationEnabled` в `KafkaConfig`
   order-, inventory- и product-service;
@@ -528,9 +534,10 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 
 ## Технологии
 
-- **Backend**: Spring Boot 3.5.16, Spring Cloud 2025.0.3, Java 17
+- **Backend**: Spring Boot 3.5.16, Spring Cloud 2025.0.3, Spring gRPC 0.12.0, Java 17
 - **Database**: PostgreSQL 15, MongoDB 7, Redis 7
 - **Messaging**: Kafka (Redpanda 23.3) + Schema Registry, события в формате Avro
+- **RPC**: gRPC (protobuf 4.32, gRPC 1.76) между order-service и inventory-service
 - **Security**: Spring Security 6.5.11, JWT
 - **Containerization**: Docker, Docker Compose, Kubernetes (k3d + Helm)
 - **Monitoring**: Micrometer и Prometheus, Grafana, Loki, Vector, Jaeger (OpenTelemetry)
@@ -575,6 +582,35 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 
 HTTP-контракт ошибок: `400` — невалидные данные/переход, `404` — заказ не найден,
 `409` — дубликат идемпотентного ключа или неподтверждённое списание остатка.
+
+## gRPC между сервисами
+
+Операции с остатками order-service вызывает по gRPC, а не по HTTP. Контракт лежит в
+`common-grpc/src/main/proto/inventory.proto`, стабы генерируются один раз на сборке модуля
+`common-grpc`, и оба сервиса зависят от него: переименованное поле — ошибка компиляции, а не
+`null` из `Map`.
+
+| Что | Где |
+|-----|-----|
+| Сервис | `InventoryService` (`Reserve`, `Release`, `Commit`) |
+| Сервер | inventory-service, отдельный порт **9095** (`GRPC_SERVER_PORT`) |
+| Клиент | order-service, канал `inventory` (`INVENTORY_GRPC_ADDRESS`) |
+| Авторизация | заголовок `authorization` в metadata, проверяется `JwtServerInterceptor` |
+
+gRPC-вызов не проходит через servlet-фильтры, поэтому токен не переносится сам: клиентский
+`JwtClientInterceptor` копирует `Authorization` текущего HTTP-запроса в metadata, а серверный
+`JwtServerInterceptor` валидирует его тем же `JwtService`, что и REST. `reserve` и `release`
+требуют `ROLE_ADMIN` или `ROLE_MANAGER` (как и HTTP-эндпоинты), `commit` — любой
+аутентифицированный вызов. Вызов без токена получает `UNAUTHENTICATED`, без роли —
+`PERMISSION_DENIED`, и резерв не подтверждается: политика fail-closed сохранена.
+
+HTTP-эндпоинты `/api/inventory/reserve|release|commit` остались: ими пользуется административный
+API и ручные проверки, а бизнес-правила у обоих транспортов общие — они вызывают один и тот же
+`InventoryService`.
+
+Порт 9095 не публикуется наружу в Kubernetes (Service типа `ClusterIP`), в compose он открыт для
+отладки. Таймаут вызова — `default-deadline: 5s`: зависший вызов роняет заказ, а не держит
+запрос открытым.
 
 ## Уведомления (notification-service)
 

@@ -323,6 +323,8 @@ services:
       dockerfile: ./inventory-service/Dockerfile
     ports:
       - "8083:8083"
+      # gRPC: order-service reserves and writes off stock over this port, not over HTTP.
+      - "9095:9095"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://inventorydb:5432/inventorydb

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package orderplatform.inventory.v1;
+
+option java_package = "com.orderplatform.grpc.inventory";
+option java_multiple_files = true;
+option java_outer_classname = "InventoryProto";
+
+// Stock operations order-service needs while an order moves through its lifecycle.
+//
+// This is an internal contract: it is not exposed through the gateway, and every call carries the
+// bearer token of the operator who triggered the order action. The HTTP endpoints of
+// inventory-service stay in place for the administrative API and for manual operations.
+service InventoryService {
+
+  // Holds stock for an order. Idempotent per (order_id, product_id).
+  rpc Reserve (ReserveRequest) returns (ReserveResponse);
+
+  // Gives back the stock an order holds. Idempotent per (order_id, product_id).
+  rpc Release (ReleaseRequest) returns (ReleaseResponse);
+
+  // Writes off the stock an order held, because the goods left the warehouse.
+  // Idempotent per order.
+  rpc Commit (CommitRequest) returns (CommitResponse);
+}
+
+message ReserveRequest {
+  string order_id = 1;
+  string product_id = 2;
+  int32 quantity = 3;
+}
+
+message ReserveResponse {
+  // False means the stock is insufficient or the reservation was already given back; the caller
+  // must not treat such an order as reserved.
+  bool reserved = 1;
+  int32 quantity = 2;
+  string message = 3;
+}
+
+message ReleaseRequest {
+  string order_id = 1;
+  string product_id = 2;
+  int32 quantity = 3;
+}
+
+message ReleaseResponse {
+  int32 quantity = 1;
+  string message = 2;
+}
+
+message CommitRequest {
+  string order_id = 1;
+}
+
+message CommitResponse {
+  bool committed = 1;
+  int32 items_committed = 2;
+  string message = 3;
+}

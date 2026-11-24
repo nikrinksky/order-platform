@@ -5,6 +5,11 @@ spring:
   # Also the service name in traces and metrics: without it spans land under "unknown_service".
   application:
     name: inventory-service
+  # The internal API order-service calls. A native gRPC server on its own port: the REST API stays
+  # on 8083, and gRPC never goes through the servlet chain.
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9095}
   datasource:
     url: jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5434}/inventorydb
     username: ${SPRING_DATASOURCE_USERNAME:inventoryuser}

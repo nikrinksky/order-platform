@@ -1,4 +1,9 @@
 spring:
+  # The integration tests drive the HTTP API; the gRPC server has its own tests and would only
+  # bind port 9095 while the suite runs.
+  grpc:
+    server:
+      enabled: false
   # The datasource is a PostgreSQL Testcontainer, contributed by AbstractInventoryIntegrationTest.
   jpa:
     hibernate:
