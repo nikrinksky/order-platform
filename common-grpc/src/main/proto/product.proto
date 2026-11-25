@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package orderplatform.product.v1;
+
+option java_package = "com.orderplatform.grpc.product";
+option java_multiple_files = true;
+option java_outer_classname = "ProductProto";
+
+// Read-only catalogue access for the gateway.
+//
+// The public REST API of product-service is proxied by the gateway as before. The one call the
+// gateway makes on every product page - "give me the product by id" - goes over gRPC instead, which
+// is the low-latency typed path the platform uses for internal synchronous calls. Writes stay on
+// REST: they are rare, administrative, and carry a request body the gateway does not need to model.
+service ProductCatalog {
+
+  // Returns one product. A product hidden from the storefront is reported as NOT_FOUND unless the
+  // caller may see hidden products, exactly like the REST endpoint.
+  rpc GetProduct (GetProductRequest) returns (ProductReply);
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+
+message ProductReply {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  // Decimal as a string: a double would lose the exactness of a price.
+  string price = 4;
+  string category = 5;
+  int32 quantity = 6;
+  bool active = 7;
+  // ISO-8601 local date-time, the same text Jackson writes for the REST response.
+  string created_at = 8;
+  string updated_at = 9;
+}

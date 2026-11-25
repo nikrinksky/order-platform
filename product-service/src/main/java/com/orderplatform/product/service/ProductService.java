@@ -108,7 +108,7 @@ public class ProductService {
     }
 
     private static RuntimeException notFound(String id) {
-        return new RuntimeException("Product not found with id: " + id);
+        return new ProductNotFoundException("Product not found with id: " + id);
     }
 
     @Transactional

@@ -273,9 +273,12 @@ kubeconform -strict -summary -kubernetes-version 1.31.5 /tmp/default.yaml /tmp/m
 - `SPRING_DATASOURCE_URL` - JDBC URL для PostgreSQL
 - `SPRING_DATA_REDIS_HOST` - хост Redis
 - `SPRING_KAFKA_BOOTSTRAP_SERVERS` - сервер Kafka (redpanda:9092 в Docker)
-- `GRPC_SERVER_PORT` - порт gRPC-сервера inventory-service (по умолчанию `9095`)
+- `GRPC_SERVER_PORT` - порт gRPC-сервера inventory-service (по умолчанию `9095`) и
+  product-service (по умолчанию `9096`)
 - `INVENTORY_GRPC_ADDRESS` - адрес gRPC inventory-service для order-service
   (`static://localhost:9095` локально, `static://inventory-service:9095` в Docker и Kubernetes)
+- `PRODUCT_GRPC_ADDRESS` - адрес gRPC product-service для api-gateway
+  (`static://localhost:9096` локально, `static://product-service:9096` в Docker и Kubernetes)
 - `NOTIFICATION_EMAIL_ENABLED` - отправлять ли письма из notification-service. По умолчанию `false`
   (локальный запуск без почтового сервера), в `docker-compose` включено и письма уходят в MailHog
 - `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` - SMTP-сервер для notification-service
@@ -411,6 +414,8 @@ OTLP/HTTP в Jaeger (`jaegertracing/all-in-one`, UI — http://localhost:16686).
   видно в том же трейсе, что и создание заказа;
 - **исходящий вызов order-service → product-service** — RestTemplate получает
   `ObservationRegistry`, контекст уходит в заголовке;
+- **исходящий вызов api-gateway → product-service** — gRPC по тому же механизму Spring gRPC:
+  карточка товара, прочитанная шлюзом, остаётся в трейсе исходного запроса;
 - **публикация в Kafka** — `spring.kafka.template.observation-enabled: true` (auth-service,
   user-service) и явные `setObservationRegistry` / `setObservationEnabled` в `KafkaConfig`
   order-, inventory- и product-service;
@@ -537,7 +542,8 @@ $env:JWT_SECRET = "devSecretKeyForLocalDevelopmentOnlyDoNotUseInProduction123456
 - **Backend**: Spring Boot 3.5.16, Spring Cloud 2025.0.3, Spring gRPC 0.12.0, Java 17
 - **Database**: PostgreSQL 15, MongoDB 7, Redis 7
 - **Messaging**: Kafka (Redpanda 23.3) + Schema Registry, события в формате Avro
-- **RPC**: gRPC (protobuf 4.32, gRPC 1.76) между order-service и inventory-service
+- **RPC**: gRPC (protobuf 4.32, gRPC 1.76) на двух участках: order-service → inventory-service
+  (остатки) и api-gateway → product-service (карточка товара)
 - **Security**: Spring Security 6.5.11, JWT
 - **Containerization**: Docker, Docker Compose, Kubernetes (k3d + Helm)
 - **Monitoring**: Micrometer и Prometheus, Grafana, Loki, Vector, Jaeger (OpenTelemetry)
@@ -585,10 +591,12 @@ HTTP-контракт ошибок: `400` — невалидные данные/
 
 ## gRPC между сервисами
 
-Операции с остатками order-service вызывает по gRPC, а не по HTTP. Контракт лежит в
-`common-grpc/src/main/proto/inventory.proto`, стабы генерируются один раз на сборке модуля
-`common-grpc`, и оба сервиса зависят от него: переименованное поле — ошибка компиляции, а не
-`null` из `Map`.
+gRPC используется на двух участках: остатки (order-service → inventory-service) и карточка товара
+(api-gateway → product-service). Контракты лежат в `common-grpc/src/main/proto/` — `inventory.proto`
+и `product.proto`, — стабы генерируются один раз на сборке модуля `common-grpc`, и оба конца
+зависят от него: переименованное поле — ошибка компиляции, а не `null` из `Map`.
+
+### Остатки: order-service → inventory-service
 
 | Что | Где |
 |-----|-----|
@@ -611,6 +619,32 @@ API и ручные проверки, а бизнес-правила у обои
 Порт 9095 не публикуется наружу в Kubernetes (Service типа `ClusterIP`), в compose он открыт для
 отладки. Таймаут вызова — `default-deadline: 5s`: зависший вызов роняет заказ, а не держит
 запрос открытым.
+
+### Карточка товара: api-gateway → product-service
+
+`GET /api/products/{id}` обслуживается по gRPC; всё остальное под `/api/products` (список, поиск,
+категория, диапазон цен, запись) по-прежнему проксируется в REST product-service.
+
+| Что | Где |
+|-----|-----|
+| Сервис | `ProductCatalog.GetProduct` |
+| Сервер | product-service, отдельный порт **9096** (`GRPC_SERVER_PORT`) |
+| Клиент | api-gateway, канал `product` (`PRODUCT_GRPC_ADDRESS`), deadline `3s` |
+| Авторизация | заголовок `authorization` в metadata, читается `OptionalJwtServerInterceptor` |
+
+Шлюз остаётся единственной REST-точкой входа: перехват сделан фильтром маршрута
+(`GrpcProductGatewayFilterFactory`), а не контроллером, поэтому rate limiter и проверка токена
+продолжают работать для карточки товара. Каталог публичный, поэтому `OptionalJwtServerInterceptor`
+не отклоняет вызов без токена — он лишь решает, увидит ли вызывающий неопубликованный товар, как и
+REST-эндпоинт. Токен, который не удалось проверить, трактуется как отсутствие токена.
+
+Цена в ответе — строка (`"19.99"`), а не `double`: двоичное представление искажает копейки.
+Статусы gRPC отображаются в HTTP: `NOT_FOUND` → `404`, `INVALID_ARGUMENT` → `400`,
+`UNAVAILABLE`/`DEADLINE_EXCEEDED` → `503`, остальное → `502`; недоступный каталог не выдаётся за
+отсутствующий товар, иначе `404` закэшировался бы и страница осталась бы сломанной после
+восстановления сервиса.
+
+Порт 9096, как и 9095, не публикуется наружу в Kubernetes; в compose он открыт для отладки.
 
 ## Уведомления (notification-service)
 

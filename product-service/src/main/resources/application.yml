@@ -5,6 +5,10 @@ spring:
   # Also the service name in traces and metrics: without it spans land under "unknown_service".
   application:
     name: product-service
+  # The gateway reads a product over gRPC on this port; the public REST API stays on 8089.
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9096}
   data:
     mongodb:
       host: ${SPRING_DATA_MONGODB_HOST:localhost}

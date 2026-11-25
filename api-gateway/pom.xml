@@ -80,6 +80,18 @@
             <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
         </dependency>
 
+        <!-- gRPC contract shared with product-service: the generated stub and messages -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- A product page is read over gRPC instead of proxying the REST call. -->
+        <dependency>
+            <groupId>org.springframework.grpc</groupId>
+            <artifactId>spring-grpc-client-spring-boot-starter</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -90,6 +102,20 @@
                     <artifactId>spring-security-crypto</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <!-- Runs a real gRPC server and channel inside the test JVM: the client is tested against
+             the generated service, not against a mock of the stub. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
+            <version>1.76.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- StepVerifier: the client returns a Mono, and the tests assert on its sequence. -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
         </dependency>
         <!-- spring-security-crypto version managed by parent pom -->
     </dependencies>

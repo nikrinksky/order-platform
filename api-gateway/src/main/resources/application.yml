@@ -1,6 +1,15 @@
 spring:
   application:
     name: api-gateway
+  # A product page is read over gRPC: see GrpcProductGatewayFilterFactory. The address lives here,
+  # not in code; "static://" tells the resolver the name is a plain host:port.
+  grpc:
+    client:
+      channels:
+        product:
+          address: ${PRODUCT_GRPC_ADDRESS:static://localhost:9096}
+          # A catalogue call that hangs must fail the page, not hold the request open.
+          default-deadline: 3s
   cloud:
     gateway:
       server:
@@ -31,6 +40,9 @@ spring:
                 - Path=/api/products/**
               filters:
                 - StripPrefix=0
+                # GET /api/products/{id} is answered from gRPC; every other catalogue call is
+                # proxied as before. The filter decides per request, so one route covers both.
+                - name: GrpcProduct
 
             - id: inventory-service
               uri: ${INVENTORY_SERVICE_URL:http://localhost:8083}

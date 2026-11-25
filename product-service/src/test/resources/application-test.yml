@@ -1,4 +1,8 @@
 spring:
+  # The unit tests exercise the classes directly; a listening gRPC server would only bind a port.
+  grpc:
+    server:
+      enabled: false
   data:
     mongodb:
       enabled: false
