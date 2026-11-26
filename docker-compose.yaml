@@ -293,6 +293,8 @@ services:
       dockerfile: ./product-service/Dockerfile
     ports:
       - "8089:8089"
+      # gRPC: the gateway answers the product page over this port, not over HTTP.
+      - "9096:9096"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATA_MONGODB_HOST: mongodb

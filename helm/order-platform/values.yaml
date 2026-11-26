@@ -75,6 +75,9 @@ apps:
       - schema-registry:8081
   product-service:
     port: 8089
+    # The internal gRPC API the gateway calls for the product page. Kept next to the HTTP port
+    # because the service listens on both.
+    grpcPort: 9096
     waitFor:
       - mongodb:27017
       - redis:6379

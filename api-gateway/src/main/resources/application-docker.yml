@@ -1,4 +1,10 @@
 spring:
+  grpc:
+    client:
+      channels:
+        product:
+          address: ${PRODUCT_GRPC_ADDRESS:static://product-service:9096}
+          default-deadline: 3s
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}

@@ -78,6 +78,17 @@
             <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- gRPC contract shared with the gateway: the generated service base class and messages -->
+        <dependency>
+            <groupId>com.orderplatform</groupId>
+            <artifactId>common-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The gateway reads a product over gRPC instead of proxying the REST call. -->
+        <dependency>
+            <groupId>org.springframework.grpc</groupId>
+            <artifactId>spring-grpc-server-spring-boot-starter</artifactId>
+        </dependency>
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

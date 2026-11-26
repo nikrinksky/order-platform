@@ -1,4 +1,9 @@
 spring:
+  # The integration tests drive the HTTP API; the gRPC server has its own test and would only
+  # bind port 9096 while the suite runs.
+  grpc:
+    server:
+      enabled: false
   # The connection is a MongoDB Testcontainer, contributed by AbstractProductIntegrationTest.
   kafka:
     bootstrap-servers: localhost:19092
